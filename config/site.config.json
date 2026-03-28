@@ -7,20 +7,22 @@
   "knowledge": {
     "basePath": "/home/ubuntu/my_knowledge",
     "showDirs": [
-      "AI学习",
-      "公众号"
+      "01-学习笔记",
+      "02-工作日志",
+      "04-内容创作",
+      "05-资源收藏",
+      "06-绘图"
     ],
     "excludeDirs": [
       ".obsidian",
       ".git",
-      "Excalidraw",
-      "Prompt",
-      "面试题库"
+      ".claude",
+      "00-规范"
     ],
     "title": "知识库"
   },
   "interview": {
-    "basePath": "/home/ubuntu/my_knowledge/面试题库",
+    "basePath": "/home/ubuntu/my_knowledge/03-面试准备/面试题库",
     "title": "面试题"
   },
   "ai": {

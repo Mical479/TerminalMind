@@ -23,7 +23,7 @@ interface DocEntry {
 const defaultConfig: KnowledgeConfig = {
   basePath: '/home/ubuntu/my_knowledge',
   showDirs: [],
-  excludeDirs: ['.obsidian', '.git', 'Excalidraw', 'Prompt', '公众号'],
+  excludeDirs: ['.obsidian', '.git', '.claude'],
   title: '知识库'
 };
 
@@ -48,13 +48,11 @@ function parseFrontmatter(content: string): { metadata: Record<string, any>; bod
   const body = match[2];
   const metadata: Record<string, any> = {};
 
-  // Simple YAML parser
   yamlStr.split('\n').forEach(line => {
     const [key, ...valueParts] = line.split(':');
     if (key && valueParts.length > 0) {
       const value = valueParts.join(':').trim();
       
-      // Parse arrays like [item1, item2]
       if (value.startsWith('[') && value.endsWith(']')) {
         metadata[key.trim()] = value.slice(1, -1).split(',').map(s => s.trim());
       } else {
@@ -67,7 +65,6 @@ function parseFrontmatter(content: string): { metadata: Record<string, any>; bod
 }
 
 function getExcerpt(body: string, maxLength: number = 120): string {
-  // Remove markdown syntax
   const clean = body
     .replace(/^#+\s+/gm, '')
     .replace(/\*\*(.+?)\*\*/g, '$1')
@@ -93,8 +90,13 @@ function getAllDocs(config: KnowledgeConfig): DocEntry[] {
     for (const item of items) {
       const fullPath = path.join(dir, item.name);
       
+      // Skip excluded dirs
       if (config.excludeDirs.includes(item.name)) continue;
       
+      // Skip README files in display
+      if (item.name.toLowerCase() === 'readme.md') continue;
+      
+      // If showDirs is set, only show those
       if (config.showDirs.length > 0 && !config.showDirs.includes(item.name) && item.isDirectory()) {
         continue;
       }
@@ -144,17 +146,71 @@ function extractTitle(content: string, fallback: string): string {
   return match ? match[1].trim() : fallback;
 }
 
+// Get subdirectories for a given path
+function getSubdirs(basePath: string, relativePath: string): string[] {
+  const fullPath = path.join(basePath, relativePath);
+  if (!fs.existsSync(fullPath)) return [];
+  
+  const items = fs.readdirSync(fullPath, { withFileTypes: true });
+  return items
+    .filter(item => item.isDirectory())
+    .map(item => item.name)
+    .filter(name => !name.startsWith('.') && !name.startsWith('assets'))
+    .sort();
+}
+
 const config = getConfig();
 const docs = getAllDocs(config);
 
+// Group by first-level category
 const grouped = docs.reduce((acc, doc) => {
-  const cat = doc.category || doc.path.split('/')[0];
-  if (!acc[cat]) acc[cat] = [];
-  acc[cat].push(doc);
+  const parts = doc.path.split('/');
+  const firstCat = parts[0] || '其他';
+  if (!acc[firstCat]) acc[firstCat] = [];
+  acc[firstCat].push(doc);
   return acc;
 }, {} as Record<string, DocEntry[]>);
 
 const categories = Object.keys(grouped).sort();
+
+// Get subdirectories for display
+const categoryMeta: Record<string, { subdirs: string[]; readme?: string }> = {};
+for (const cat of categories) {
+  const subdirs = getSubdirs(config.basePath, cat);
+  const readmePath = path.join(config.basePath, cat, 'README.md');
+  categoryMeta[cat] = {
+    subdirs,
+    readme: fs.existsSync(readmePath) ? fs.readFileSync(readmePath, 'utf-8').slice(0, 200) : undefined
+  };
+}
+
+// Category icons and colors
+const categoryInfo: Record<string, { icon: string; color: string; desc: string }> = {
+  '01-学习笔记': { icon: '📖', color: '#007AFF', desc: '系统化的技术学习笔记沉淀' },
+  '02-工作日志': { icon: '💼', color: '#34C759', desc: '日常工作记录' },
+  '03-面试准备': { icon: '🎯', color: '#FF9500', desc: '求职跳槽相关资料' },
+  '04-内容创作': { icon: '🌐', color: '#5856D6', desc: '公众号内容创作素材' },
+  '05-资源收藏': { icon: '📊', color: '#FF2D55', desc: '优质内容收藏' },
+  '06-绘图': { icon: '📐', color: '#00C7BE', desc: 'Excalidraw 绘图文件' },
+};
+
+const categoryIcons: Record<string, string> = {
+  'Java后端': '☕',
+  'AI与大模型': '🤖',
+  '系统架构': '🏗️',
+  '工具效率': '🛠️',
+  '面试题库': '📝',
+  '面经': '💬',
+  'AI热点新闻': '📰',
+  'AI工具分享': '🔧',
+  'Java知识分享': '📚',
+  '优质文章': '✨',
+  '读书笔记': '📖',
+  '架构图': '📊',
+  '流程图': '📈',
+  '日记': '📅',
+  '问题解决': '🔍',
+};
 ---
 
 <Layout title={config.title || '知识库'}>
@@ -180,54 +236,79 @@ const categories = Object.keys(grouped).sort();
     />
   </div>
 
-  <!-- Doc Cards -->
-  <div style="display: grid; gap: 16px;">
-    {docs.map(doc => (
-      <a 
-        href={`/knowledge/${doc.path.replace(/\\/g, '/').replace(/\.mdx?$/, '')}`}
-        class="doc-card"
-        data-title={doc.title.toLowerCase()}
-        data-tags={doc.tags?.join(' ').toLowerCase() || ''}
-        data-excerpt={doc.excerpt || ''}
-      >
-        <div class="doc-card-inner">
-          <div class="doc-card-header">
-            <div class="doc-meta">
-              {doc.date && (
-                <span class="doc-date">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                    <line x1="16" y1="2" x2="16" y2="6"></line>
-                    <line x1="8" y1="2" x2="8" y2="6"></line>
-                    <line x1="3" y1="10" x2="21" y2="10"></line>
-                  </svg>
-                  {doc.date}
-                </span>
-              )}
-              <span class="doc-category">{doc.category || doc.path.split('/')[0]}</span>
+  <!-- Category Sections -->
+  {categories.map(category => {
+    const info = categoryInfo[category] || { icon: '📁', color: '#8E8E93', desc: '' };
+    const meta = categoryMeta[category];
+    
+    return (
+      <div class="category-section" data-category={category.toLowerCase()}>
+        <div class="category-header">
+          <div class="category-info">
+            <span class="category-icon">{info.icon}</span>
+            <div>
+              <h2 class="category-title">{category}</h2>
+              <p class="category-desc">{info.desc}</p>
             </div>
-            {doc.tags && doc.tags.length > 0 && (
-              <div class="doc-tags">
-                {doc.tags.slice(0, 3).map(tag => (
-                  <span class="doc-tag">{tag}</span>
-                ))}
-              </div>
-            )}
           </div>
-          <h3 class="doc-title">{doc.title}</h3>
-          {doc.excerpt && (
-            <p class="doc-excerpt">{doc.excerpt}</p>
-          )}
-          <div class="doc-arrow">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-              <polyline points="12 5 19 12 12 19"></polyline>
-            </svg>
+          <div class="category-stats">
+            <span class="doc-count">{grouped[category].length} 篇</span>
           </div>
         </div>
-      </a>
-    ))}
-  </div>
+        
+        {/* Subdirectories */}
+        {meta.subdirs.length > 0 && (
+          <div class="subdirs-container">
+            {meta.subdirs.map(subdir => {
+              const subIcon = categoryIcons[subdir] || '📁';
+              return (
+                <a href={`/knowledge/${category}/${subdir}`} class="subdir-badge">
+                  <span class="subdir-icon">{subIcon}</span>
+                  <span>{subdir}</span>
+                </a>
+              );
+            })}
+          </div>
+        )}
+        
+        {/* Doc Cards */}
+        <div class="docs-grid">
+          {grouped[category].slice(0, 6).map(doc => (
+            <a 
+              href={`/knowledge/${doc.path.replace(/\\/g, '/').replace(/\.mdx?$/, '')}`}
+              class="doc-card"
+              data-title={doc.title.toLowerCase()}
+              data-tags={doc.tags?.join(' ').toLowerCase() || ''}
+              data-excerpt={doc.excerpt || ''}
+            >
+              <div class="doc-card-inner">
+                <div class="doc-card-header">
+                  {doc.date && (
+                    <span class="doc-date">{doc.date}</span>
+                  )}
+                  {doc.tags && doc.tags.length > 0 && (
+                    <span class="doc-tag">{doc.tags[0]}</span>
+                  )}
+                </div>
+                <h3 class="doc-title">{doc.title}</h3>
+                {doc.excerpt && (
+                  <p class="doc-excerpt">{doc.excerpt}</p>
+                )}
+              </div>
+            </a>
+          ))}
+        </div>
+        
+        {grouped[category].length > 6 && (
+          <div class="show-more">
+            <a href={`/knowledge/${category}`} class="show-more-link">
+              查看全部 {grouped[category].length} 篇 →
+            </a>
+          </div>
+        )}
+      </div>
+    );
+  })}
 
   <!-- Empty state -->
   {docs.length === 0 && (
@@ -239,123 +320,209 @@ const categories = Object.keys(grouped).sort();
 </Layout>
 
 <style>
+  .category-section {
+    background: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .category-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 16px;
+  }
+
+  .category-info {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .category-icon {
+    font-size: 32px;
+    line-height: 1;
+  }
+
+  .category-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+
+  .category-desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0;
+  }
+
+  .category-stats {
+    text-align: right;
+  }
+
+  .doc-count {
+    font-size: 13px;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    padding: 4px 10px;
+    border-radius: 12px;
+  }
+
+  .subdirs-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--apple-border);
+  }
+
+  .subdir-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: var(--bg-secondary);
+    border-radius: 16px;
+    text-decoration: none;
+    color: var(--text-primary);
+    font-size: 13px;
+    transition: all 0.2s ease;
+  }
+
+  .subdir-badge:hover {
+    background: var(--apple-blue);
+    color: white;
+  }
+
+  .subdir-icon {
+    font-size: 14px;
+  }
+
+  .docs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 16px;
+  }
+
   .doc-card {
-    display: block;
     text-decoration: none;
     color: inherit;
   }
 
   .doc-card-inner {
-    background: var(--bg-primary);
+    height: 100%;
+    background: var(--bg-tertiary);
     border-radius: var(--radius-md);
-    padding: 20px 24px;
-    box-shadow: var(--shadow-sm);
-    border: 1px solid transparent;
+    padding: 16px;
+    border: 1px solid var(--apple-border);
     transition: all 0.25s ease;
-    position: relative;
   }
 
   .doc-card:hover .doc-card-inner {
+    border-color: var(--apple-blue);
     box-shadow: var(--shadow-md);
-    border-color: var(--apple-border);
     transform: translateY(-2px);
   }
 
   .doc-card-header {
     display: flex;
-    align-items: center;
     justify-content: space-between;
-    margin-bottom: 12px;
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-
-  .doc-meta {
-    display: flex;
     align-items: center;
-    gap: 12px;
-    font-size: 13px;
+    margin-bottom: 10px;
   }
 
   .doc-date {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    color: var(--text-secondary);
-  }
-
-  .doc-category {
-    color: var(--apple-blue);
-    font-weight: 500;
-    background: rgba(0, 122, 255, 0.08);
-    padding: 2px 10px;
-    border-radius: 12px;
     font-size: 12px;
-  }
-
-  .doc-tags {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
+    color: var(--text-secondary);
   }
 
   .doc-tag {
-    background: var(--bg-secondary);
-    color: var(--text-secondary);
-    padding: 2px 8px;
-    border-radius: 6px;
     font-size: 11px;
-    font-weight: 500;
+    color: var(--apple-blue);
+    background: rgba(0, 122, 255, 0.08);
+    padding: 2px 8px;
+    border-radius: 8px;
   }
 
   .doc-title {
-    font-size: 17px;
+    font-size: 15px;
     font-weight: 600;
     color: var(--text-primary);
     margin-bottom: 8px;
     line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .doc-excerpt {
-    font-size: 14px;
+    font-size: 13px;
     color: var(--text-secondary);
-    line-height: 1.6;
+    line-height: 1.5;
     margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
-  .doc-arrow {
-    position: absolute;
-    right: 24px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--apple-border);
-    transition: all 0.25s ease;
+  .show-more {
+    text-align: center;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--apple-border);
   }
 
-  .doc-card:hover .doc-arrow {
+  .show-more-link {
     color: var(--apple-blue);
-    transform: translateY(-50%) translateX(4px);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .show-more-link:hover {
+    text-decoration: underline;
   }
 </style>
 
 <script>
   const searchInput = document.getElementById('search-input');
   const docCards = document.querySelectorAll('.doc-card');
+  const categorySections = document.querySelectorAll('.category-section');
   
   searchInput?.addEventListener('input', (e) => {
     const query = (e.target as HTMLInputElement).value.toLowerCase();
     
-    docCards.forEach(card => {
-      const title = card.getAttribute('data-title') || '';
-      const tags = card.getAttribute('data-tags') || '';
-      const excerpt = card.getAttribute('data-excerpt') || '';
+    categorySections.forEach(section => {
+      const section = section as HTMLElement;
+      const cards = section.querySelectorAll('.doc-card');
+      let visibleCount = 0;
       
-      const matches = title.includes(query) || tags.includes(query) || excerpt.includes(query);
+      cards.forEach(card => {
+        const title = card.getAttribute('data-title') || '';
+        const tags = card.getAttribute('data-tags') || '';
+        const excerpt = card.getAttribute('data-excerpt') || '';
+        
+        const matches = title.includes(query) || tags.includes(query) || excerpt.includes(query);
+        
+        if (matches || query === '') {
+          (card as HTMLElement).style.display = 'block';
+          visibleCount++;
+        } else {
+          (card as HTMLElement).style.display = 'none';
+        }
+      });
       
-      if (matches || query === '') {
-        (card as HTMLElement).style.display = 'block';
+      // Hide category if no matches
+      if (visibleCount === 0 && query !== '') {
+        section.style.display = 'none';
       } else {
-        (card as HTMLElement).style.display = 'none';
+        section.style.display = 'block';
       }
     });
   });
