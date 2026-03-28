@@ -65,8 +65,11 @@ export async function getStaticPaths() {
           const titleMatch = body.match(/^#\s+(.+)$/m);
           const title = metadata.title || (titleMatch ? titleMatch[1].trim() : slug);
 
-          // Helper to convert wikilinks
-          function convertWikilink(text: string): string {
+          // Helper to convert wikilinks with context of current path
+          function convertWikilink(text: string, currentSlug: string): string {
+            // Current slug is like "04-内容创作/AI热点新闻"
+            // Wikilinks in this folder should resolve relative to this path
+            
             return text
               .replace(/\!\[\[([^\]|]+)(\|[^\]]+)?\]\]/g, (_, path, alias) => {
                 const cleanPath = path.replace(/\/+$/, '');
@@ -76,13 +79,22 @@ export async function getStaticPaths() {
               .replace(/\[\[([^\]|]+)(\|[^\]]+)?\]\]/g, (_, path, alias) => {
                 const cleanPath = path.replace(/\/+$/, '');
                 const displayText = alias ? alias.slice(1) : cleanPath.split('/').pop() || cleanPath;
-                const urlPath = cleanPath.replace(/\s+/g, '-').replace(/\//g, '%2F');
+                
+                // If path has a slash, it's already a full path from root
+                // If no slash, it's relative to current folder (currentSlug)
+                let urlPath: string;
+                if (cleanPath.includes('/')) {
+                  urlPath = cleanPath.replace(/\s+/g, '-');
+                } else {
+                  const fullPath = `${currentSlug}/${cleanPath}`;
+                  urlPath = fullPath.replace(/\s+/g, '-');
+                }
                 return `<a href="/knowledge/${urlPath}" style="color: var(--apple-blue);">${displayText}</a>`;
               });
           }
 
           // First, convert all wikilinks in the entire body
-          let htmlContent = convertWikilink(body);
+          let htmlContent = convertWikilink(body, fullSlug);
 
           // Then convert tables (already have wikilinks converted)
           const tableRegex = /^(\|.+\|\n)((?:\|[-: ]+\|\n)?)((?:\|.+\|\n?)+)/gm;
