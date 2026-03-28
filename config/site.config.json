@@ -7,14 +7,14 @@
   "knowledge": {
     "basePath": "/home/ubuntu/my_knowledge",
     "showDirs": [
-      "AI学习"
+      "AI学习",
+      "公众号"
     ],
     "excludeDirs": [
       ".obsidian",
       ".git",
       "Excalidraw",
-      "Prompt",
-      "公众号"
+      "Prompt"
     ],
     "title": "知识库"
   },
