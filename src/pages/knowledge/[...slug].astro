@@ -78,9 +78,12 @@ export async function getStaticPaths() {
               });
           }
 
-          // Convert tables first (before other processing)
+          // First, convert all wikilinks in the entire body
+          let htmlContent = convertWikilink(body);
+
+          // Then convert tables (already have wikilinks converted)
           const tableRegex = /^(\|.+\|\n)((?:\|[-: ]+\|\n)?)((?:\|.+\|\n?)+)/gm;
-          let htmlContent = body.replace(tableRegex, (_, header, separator, rows) => {
+          htmlContent = htmlContent.replace(tableRegex, (_, header, separator, rows) => {
             const headerCells = header.trim().split('|').filter(c => c.trim());
             const isAlignCenter = separator.includes(':--:');
             const isAlignLeft = separator.includes(':--');
@@ -88,7 +91,7 @@ export async function getStaticPaths() {
             let thtml = '<table class="md-table"><thead><tr>';
             headerCells.forEach(cell => {
               const align = isAlignCenter ? ' center' : isAlignLeft ? ' left' : '';
-              thtml += `<th${align}>${convertWikilink(cell.trim())}</th>`;
+              thtml += `<th${align}>${cell.trim()}</th>`;
             });
             thtml += '</tr></thead><tbody>';
             
@@ -103,7 +106,7 @@ export async function getStaticPaths() {
               const cells = trimmedRow.split('|').filter(c => c.trim() !== undefined && c.trim() !== '');
               thtml += '<tr>';
               cells.forEach(cell => {
-                thtml += `<td>${convertWikilink(cell.trim())}</td>`;
+                thtml += `<td>${cell.trim()}</td>`;
               });
               thtml += '</tr>';
             });
