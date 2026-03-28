@@ -34,7 +34,9 @@ export async function getStaticPaths() {
         const ext = path.extname(item.name).toLowerCase();
         if (ext === '.md' || ext === '.mdx') {
           const slug = item.name.replace(/\.mdx?$/, '');
-          const fullSlug = baseSlug ? `${baseSlug}/${slug}` : slug;
+          // If file name matches parent folder name, use parent path as slug
+          const parentFolderName = baseSlug ? baseSlug.split('/').pop() : '';
+          const fullSlug = (parentFolderName === slug) ? baseSlug : (baseSlug ? `${baseSlug}/${slug}` : slug);
           const content = fs.readFileSync(fullPath, 'utf-8');
           
           // Parse frontmatter inline
