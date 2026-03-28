@@ -16,6 +16,7 @@ export default defineConfig({
   },
   server: {
     port: 4321,
-    host: true
+    host: true,
+    allowedHosts: ['ai.suyang.site', 'localhost', '127.0.0.1']
   }
 });
