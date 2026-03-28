@@ -71,6 +71,7 @@ function getExcerpt(body: string, maxLength: number = 120): string {
     .replace(/\*(.+?)\*/g, '$1')
     .replace(/`([^`]+)`/g, '$1')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/\[\[([^\]|]+)(\|[^\]]+)?\]\]/g, (_, path, alias) => alias ? alias.slice(1) : path.split('/').pop() || path)
     .replace(/^[-*+]\s+/gm, '')
     .replace(/^\d+\.\s+/gm, '')
     .trim();

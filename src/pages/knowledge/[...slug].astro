@@ -71,6 +71,17 @@ export async function getStaticPaths() {
             .replace(/\*(.+?)\*/g, '<em>$1</em>')
             .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
             .replace(/`([^`]+)`/g, '<code>$1</code>')
+            // Obsidian wikilinks: [[link]] and [[link|display]]
+            .replace(/\!\[\[([^\]|]+)(\|[^\]]+)?\]\]/g, (match, path, alias) => {
+              const displayText = alias ? alias.slice(1) : path.split('/').pop();
+              const urlPath = path.replace(/\s+/g, '-');
+              return `<span class="wikilink-embed">${displayText}</span>`;
+            })
+            .replace(/\[\[([^\]|]+)(\|[^\]]+)?\]\]/g, (match, path, alias) => {
+              const displayText = alias ? alias.slice(1) : path.split('/').pop();
+              const urlPath = path.replace(/\s+/g, '-').replace(/\//g, '%2F');
+              return `<a href="/knowledge/${urlPath}" style="color: var(--apple-blue);">${displayText}</a>`;
+            })
             .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color: var(--apple-blue);">$1</a>')
             .replace(/^- (.+)$/gm, '<li>$1</li>')
             .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
