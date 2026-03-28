@@ -62,8 +62,57 @@ export async function getStaticPaths() {
           const titleMatch = body.match(/^#\s+(.+)$/m);
           const title = metadata.title || (titleMatch ? titleMatch[1].trim() : slug);
 
-          // Simple markdown to HTML conversion
-          const htmlContent = body
+          // Helper to convert wikilinks
+          function convertWikilink(text: string): string {
+            return text
+              .replace(/\!\[\[([^\]|]+)(\|[^\]]+)?\]\]/g, (_, path, alias) => {
+                const cleanPath = path.replace(/\/+$/, '');
+                const displayText = alias ? alias.slice(1) : cleanPath.split('/').pop() || cleanPath;
+                return `<span class="wikilink-embed">${displayText}</span>`;
+              })
+              .replace(/\[\[([^\]|]+)(\|[^\]]+)?\]\]/g, (_, path, alias) => {
+                const cleanPath = path.replace(/\/+$/, '');
+                const displayText = alias ? alias.slice(1) : cleanPath.split('/').pop() || cleanPath;
+                const urlPath = cleanPath.replace(/\s+/g, '-').replace(/\//g, '%2F');
+                return `<a href="/knowledge/${urlPath}" style="color: var(--apple-blue);">${displayText}</a>`;
+              });
+          }
+
+          // Convert tables first (before other processing)
+          const tableRegex = /^(\|.+\|\n)((?:\|[-: ]+\|\n)?)((?:\|.+\|\n?)+)/gm;
+          let htmlContent = body.replace(tableRegex, (_, header, separator, rows) => {
+            const headerCells = header.trim().split('|').filter(c => c.trim());
+            const isAlignCenter = separator.includes(':--:');
+            const isAlignLeft = separator.includes(':--');
+            
+            let thtml = '<table class="md-table"><thead><tr>';
+            headerCells.forEach(cell => {
+              const align = isAlignCenter ? ' center' : isAlignLeft ? ' left' : '';
+              thtml += `<th${align}>${convertWikilink(cell.trim())}</th>`;
+            });
+            thtml += '</tr></thead><tbody>';
+            
+            const rowLines = rows.trim().split('\n');
+            rowLines.forEach(row => {
+              const trimmedRow = row.trim();
+              if (!trimmedRow) return;
+              // Skip separator rows like |---|---|
+              const cleanedCell = trimmedRow.replace(/\|/g, '').replace(/\s/g, '');
+              if (/^[-:]+$/.test(cleanedCell)) return;
+              
+              const cells = trimmedRow.split('|').filter(c => c.trim() !== undefined && c.trim() !== '');
+              thtml += '<tr>';
+              cells.forEach(cell => {
+                thtml += `<td>${convertWikilink(cell.trim())}</td>`;
+              });
+              thtml += '</tr>';
+            });
+            thtml += '</tbody></table>';
+            return thtml;
+          });
+
+          // Then process other markdown
+          htmlContent = htmlContent
             .replace(/^### (.+)$/gm, '<h3>$1</h3>')
             .replace(/^## (.+)$/gm, '<h2>$1</h2>')
             .replace(/^# (.+)$/gm, '<h1>$1</h1>')
@@ -71,17 +120,6 @@ export async function getStaticPaths() {
             .replace(/\*(.+?)\*/g, '<em>$1</em>')
             .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
             .replace(/`([^`]+)`/g, '<code>$1</code>')
-            // Obsidian wikilinks: [[link]] and [[link|display]]
-            .replace(/\!\[\[([^\]|]+)(\|[^\]]+)?\]\]/g, (match, path, alias) => {
-              const displayText = alias ? alias.slice(1) : path.split('/').pop();
-              const urlPath = path.replace(/\s+/g, '-');
-              return `<span class="wikilink-embed">${displayText}</span>`;
-            })
-            .replace(/\[\[([^\]|]+)(\|[^\]]+)?\]\]/g, (match, path, alias) => {
-              const displayText = alias ? alias.slice(1) : path.split('/').pop();
-              const urlPath = path.replace(/\s+/g, '-').replace(/\//g, '%2F');
-              return `<a href="/knowledge/${urlPath}" style="color: var(--apple-blue);">${displayText}</a>`;
-            })
             .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color: var(--apple-blue);">$1</a>')
             .replace(/^- (.+)$/gm, '<li>$1</li>')
             .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
