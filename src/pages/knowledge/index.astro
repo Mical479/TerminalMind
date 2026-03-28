@@ -152,6 +152,9 @@ function getSubdirs(basePath: string, relativePath: string): string[] {
   const fullPath = path.join(basePath, relativePath);
   if (!fs.existsSync(fullPath)) return [];
   
+  const stat = fs.statSync(fullPath);
+  if (!stat.isDirectory()) return [];
+  
   const items = fs.readdirSync(fullPath, { withFileTypes: true });
   return items
     .filter(item => item.isDirectory())
@@ -499,9 +502,9 @@ const categoryIcons: Record<string, string> = {
   searchInput?.addEventListener('input', (e) => {
     const query = (e.target as HTMLInputElement).value.toLowerCase();
     
-    categorySections.forEach(section => {
-      const section = section as HTMLElement;
-      const cards = section.querySelectorAll('.doc-card');
+    categorySections.forEach((sectionEl) => {
+      const sectionHTMLElement = sectionEl as HTMLElement;
+      const cards = sectionHTMLElement.querySelectorAll('.doc-card');
       let visibleCount = 0;
       
       cards.forEach(card => {
@@ -521,9 +524,9 @@ const categoryIcons: Record<string, string> = {
       
       // Hide category if no matches
       if (visibleCount === 0 && query !== '') {
-        section.style.display = 'none';
+        sectionHTMLElement.style.display = 'none';
       } else {
-        section.style.display = 'block';
+        sectionHTMLElement.style.display = 'block';
       }
     });
   });

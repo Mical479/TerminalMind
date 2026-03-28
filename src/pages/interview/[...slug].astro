@@ -3,109 +3,9 @@ import Layout from '../../layouts/Layout.astro';
 import fs from 'fs';
 import path from 'path';
 
-interface InterviewConfig {
-  basePath: string;
-  title: string;
-}
-
-const defaultConfig: InterviewConfig = {
-  basePath: '/home/ubuntu/my_knowledge/面试题库',
-  title: '面试题'
-};
-
-function getConfig(): InterviewConfig {
-  try {
-    const configPath = path.join(process.cwd(), 'config', 'site.config.json');
-    if (fs.existsSync(configPath)) {
-      const configData = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-      return { ...defaultConfig, ...configData.interview };
-    }
-  } catch (e) {
-    console.error('Failed to load config:', e);
-  }
-  return defaultConfig;
-}
-
-function parseFrontmatter(content: string): { metadata: Record<string, any>; body: string } {
-  const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-  if (!match) return { metadata: {}, body: content };
-
-  const yamlStr = match[1];
-  const body = match[2];
-  const metadata: Record<string, any> = {};
-
-  yamlStr.split('\n').forEach(line => {
-    const [key, ...valueParts] = line.split(':');
-    if (key && valueParts.length > 0) {
-      const value = valueParts.join(':').trim();
-      
-      if (value.startsWith('[') && value.endsWith(']')) {
-        metadata[key.trim()] = value.slice(1, -1).split(',').map(s => s.trim());
-      } else {
-        metadata[key.trim()] = value.replace(/^["']|["']$/g, '');
-      }
-    }
-  });
-
-  return { metadata, body };
-}
-
-interface Question {
-  number: number;
-  question: string;
-  options: { letter: string; text: string; isAnswer: boolean }[];
-  explanation?: string;
-}
-
-function parseQuestions(body: string): Question[] {
-  const questions: Question[] = [];
-  const blocks = body.split(/^##\s+\d+[\.:]?\s*/m).filter(b => b.trim());
-  
-  blocks.forEach((block, index) => {
-    const lines = block.trim().split('\n');
-    const questionText = lines[0].replace(/\*\*/g, '').trim();
-    const rest = lines.slice(1).join('\n');
-    
-    // Parse options
-    const optionMatches = rest.matchAll(/^- ([A-Z])\)\s*(.+)$/gm);
-    const options: Question['options'] = [];
-    let explanation: string | undefined;
-    
-    for (const match of optionMatches) {
-      const letter = match[1];
-      let text = match[2].trim();
-      
-      // Check if this is the answer
-      const isAnswer = text.includes('**[答案]**') || text.includes('[答案]');
-      text = text.replace(/\*\*\[答案\]\*\*/g, '').replace('[答案]', '').trim();
-      
-      options.push({ letter, text, isAnswer });
-    }
-    
-    // Parse explanation
-    const explainMatch = rest.match(/\*\*解析：**\s*([\s\S]*?)(?:---|$)/);
-    if (explainMatch) {
-      explanation = explainMatch[1].trim();
-    }
-    
-    if (options.length > 0) {
-      questions.push({
-        number: index + 1,
-        question: questionText,
-        options,
-        explanation
-      });
-    }
-  });
-  
-  return questions;
-}
-
 export async function getStaticPaths() {
-  const config = getConfig();
-  const basePath = config.basePath;
-  
-  const paths: { params: { slug: string }; props: { title: string; metadata: Record<string, any>; questions: Question[] } }[] = [];
+  const basePath = '/home/ubuntu/my_knowledge/03-面试准备/面试题库';
+  const paths = [];
 
   if (!fs.existsSync(basePath)) return paths;
 
@@ -117,21 +17,77 @@ export async function getStaticPaths() {
     if (item.isDirectory()) continue;
     
     const ext = path.extname(item.name).toLowerCase();
-    if (ext === '.md' || ext === '.mdx') {
-      const slug = item.name.replace(/\.mdx?$/, '');
-      const content = fs.readFileSync(fullPath, 'utf-8');
-      const { metadata, body } = parseFrontmatter(content);
-      const questions = parseQuestions(body);
-
-      paths.push({
-        params: { slug },
-        props: { 
-          title: metadata.title || slug,
-          metadata,
-          questions
+    if (ext !== '.md' && ext !== '.mdx') continue;
+    
+    const slug = item.name.replace(/\.mdx?$/, '');
+    const content = fs.readFileSync(fullPath, 'utf-8');
+    
+    // Parse frontmatter
+    const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+    let metadata: Record<string, any> = {};
+    let body = content;
+    
+    if (match) {
+      const yamlStr = match[1];
+      body = match[2];
+      
+      yamlStr.split('\n').forEach(line => {
+        const [key, ...valueParts] = line.split(':');
+        if (key && valueParts.length > 0) {
+          const value = valueParts.join(':').trim();
+          if (value.startsWith('[') && value.endsWith(']')) {
+            metadata[key.trim()] = value.slice(1, -1).split(',').map(s => s.trim());
+          } else {
+            metadata[key.trim()] = value.replace(/^["']|["']$/g, '');
+          }
         }
       });
     }
+    
+    // Parse questions
+    const questions: any[] = [];
+    const blocks = body.split(/^##\s+\d+[\.:]?\s*/m).filter(b => b.trim());
+    
+    blocks.forEach((block, index) => {
+      const lines = block.trim().split('\n');
+      const questionText = lines[0].replace(/\*\*/g, '').trim();
+      const rest = lines.slice(1).join('\n');
+      
+      const optionMatches = rest.matchAll(/^- ([A-Z])\)\s*(.+)$/gm);
+      const options: any[] = [];
+      let explanation: string | undefined;
+      
+      for (const m of optionMatches) {
+        const letter = m[1];
+        let text = m[2].trim();
+        const isAnswer = text.includes('**[答案]**') || text.includes('[答案]');
+        text = text.replace(/\*\*\[答案\]\*\*/g, '').replace('[答案]', '').trim();
+        options.push({ letter, text, isAnswer });
+      }
+      
+      const explainMatch = rest.match(/\*\*解析：\*\s*(.+?)(?:---|$)/s);
+      if (explainMatch) {
+        explanation = explainMatch[1].trim();
+      }
+      
+      if (options.length > 0) {
+        questions.push({
+          number: index + 1,
+          question: questionText,
+          options,
+          explanation
+        });
+      }
+    });
+
+    paths.push({
+      params: { slug },
+      props: { 
+        title: metadata.title || slug,
+        metadata,
+        questions
+      }
+    });
   }
 
   return paths;
@@ -150,19 +106,16 @@ const diff = difficultyConfig[metadata.difficulty || 'Medium'] || difficultyConf
 
 <Layout title={title}>
   <div style="max-width: 900px; margin: 0 auto; padding-bottom: 60px;">
-    <!-- Back & Header -->
     <div style="margin-bottom: 24px;">
       <a href="/interview" style="color: var(--apple-blue); text-decoration: none; font-size: 14px; display: inline-flex; align-items: center; gap: 4px;">
         ← 返回面试题
       </a>
     </div>
 
-    <!-- Title Card -->
     <div class="content-card" style="margin-bottom: 24px;">
       <div style="padding: 24px;">
         <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;">
           <span 
-            class="difficulty-badge"
             style={`color: ${diff.color}; background: ${diff.bg}; padding: 4px 12px; border-radius: 12px; font-size: 13px; font-weight: 600;`}
           >
             {diff.label}
@@ -185,7 +138,6 @@ const diff = difficultyConfig[metadata.difficulty || 'Medium'] || difficultyConf
       </div>
     </div>
 
-    <!-- Questions -->
     <div class="questions-container">
       {questions.map((q, index) => (
         <div class="question-card" data-index={index}>
@@ -206,7 +158,7 @@ const diff = difficultyConfig[metadata.difficulty || 'Medium'] || difficultyConf
           <div class="answer-section" style="display: none;">
             <div class="answer-reveal">
               <span class="reveal-label">正确答案：</span>
-              <span class="reveal-answer">{q.options.find(o => o.isAnswer)?.letter}</span>
+              <span class="reveal-answer">{q.options.find((o: any) => o.isAnswer)?.letter}</span>
             </div>
             {q.explanation && (
               <div class="explanation">
@@ -225,7 +177,6 @@ const diff = difficultyConfig[metadata.difficulty || 'Medium'] || difficultyConf
       ))}
     </div>
 
-    <!-- AI Hint -->
     <div class="content-card" style="margin-top: 24px;">
       <div style="padding: 20px; text-align: center;">
         <p style="color: var(--text-secondary); margin-bottom: 12px;">需要 AI 帮你解答疑问？</p>
@@ -250,11 +201,6 @@ const diff = difficultyConfig[metadata.difficulty || 'Medium'] || difficultyConf
     box-shadow: var(--shadow-sm);
     border: 1px solid var(--apple-border);
     overflow: hidden;
-    transition: all 0.25s ease;
-  }
-
-  .question-card:hover {
-    box-shadow: var(--shadow-md);
   }
 
   .question-header {
@@ -408,24 +354,6 @@ const diff = difficultyConfig[metadata.difficulty || 'Medium'] || difficultyConf
     color: white;
     border-color: var(--apple-blue);
   }
-
-  @media (max-width: 768px) {
-    .question-header {
-      padding: 16px;
-    }
-    
-    .question-text {
-      font-size: 15px;
-    }
-    
-    .options-container {
-      padding: 12px 16px;
-    }
-    
-    .option-item {
-      padding: 12px;
-    }
-  }
 </style>
 
 <script>
@@ -438,7 +366,6 @@ const diff = difficultyConfig[metadata.difficulty || 'Medium'] || difficultyConf
       answerSection.style.display = 'block';
       btn.textContent = '收起答案';
       
-      // Auto reveal correct/incorrect
       const options = card.querySelectorAll('.option-item');
       const correctLetter = card.querySelector('.reveal-answer')?.textContent;
       
@@ -452,7 +379,6 @@ const diff = difficultyConfig[metadata.difficulty || 'Medium'] || difficultyConf
       answerSection.style.display = 'none';
       btn.textContent = '查看答案 & 解析';
       
-      // Reset styles
       const options = card.querySelectorAll('.option-item');
       options.forEach(opt => {
         opt.classList.remove('correct', 'incorrect');
@@ -460,6 +386,5 @@ const diff = difficultyConfig[metadata.difficulty || 'Medium'] || difficultyConf
     }
   }
 
-  // Make toggleAnswer available globally
   (window as any).toggleAnswer = toggleAnswer;
 </script>
