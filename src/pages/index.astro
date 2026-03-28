@@ -1,0 +1,179 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="Home">
+  <div class="max-w-4xl mx-auto">
+    <!-- Terminal Welcome -->
+    <div class="terminal-window mt-8">
+      <div class="terminal-header">
+        <div class="terminal-dot dot-red"></div>
+        <div class="terminal-dot dot-yellow"></div>
+        <div class="terminal-dot dot-green"></div>
+        <span class="ml-4 text-sm opacity-70">welcome.sh</span>
+      </div>
+      <div class="terminal-body" id="terminal-output">
+        <div id="typed-content"></div>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+      <a href="/knowledge" class="terminal-window p-6 hover:border-cyan-400 transition-all duration-300 group">
+        <div class="text-3xl mb-3">📚</div>
+        <h3 class="text-lg font-bold mb-2 glow-cyan" style="color: var(--cyber-cyan);">Knowledge Base</h3>
+        <p class="text-sm opacity-70">Browse my knowledge library. Java, AI, Architecture, and more...</p>
+        <div class="mt-4 text-sm opacity-50 group-hover:opacity-100 transition-opacity">
+          <span style="color: var(--cyber-green);">→ cd knowledge/</span>
+        </div>
+      </a>
+
+      <a href="/interview" class="terminal-window p-6 hover:border-cyan-400 transition-all duration-300 group">
+        <div class="text-3xl mb-3">🎯</div>
+        <h3 class="text-lg font-bold mb-2 glow-purple" style="color: var(--cyber-purple);">Interview Mode</h3>
+        <p class="text-sm opacity-70">Challenge yourself with interview questions. AI-powered feedback!</p>
+        <div class="mt-4 text-sm opacity-50 group-hover:opacity-100 transition-opacity">
+          <span style="color: var(--cyber-green);">→ ./start_interview.sh</span>
+        </div>
+      </a>
+
+      <a href="/chat" class="terminal-window p-6 hover:border-cyan-400 transition-all duration-300 group">
+        <div class="text-3xl mb-3">🤖</div>
+        <h3 class="text-lg font-bold mb-2" style="color: var(--cyber-yellow);">AI Chat</h3>
+        <p class="text-sm opacity-70">Chat with AI about my knowledge base. Ask anything!</p>
+        <div class="mt-4 text-sm opacity-50 group-hover:opacity-100 transition-opacity">
+          <span style="color: var(--cyber-green);">→ python ai_chat.py</span>
+        </div>
+      </a>
+    </div>
+
+    <!-- Stats -->
+    <div class="terminal-window mt-8 p-6">
+      <div class="text-sm mb-4" style="color: var(--cyber-purple);">// system stats</div>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+        <div>
+          <div class="text-2xl font-bold glow-green" id="doc-count">-</div>
+          <div class="text-sm opacity-60">documents</div>
+        </div>
+        <div>
+          <div class="text-2xl font-bold glow-cyan" id="interview-count">-</div>
+          <div class="text-sm opacity-60">interview Qs</div>
+        </div>
+        <div>
+          <div class="text-2xl font-bold glow-purple" style="color: var(--cyber-purple);">∞</div>
+          <div class="text-sm opacity-60">possibilities</div>
+        </div>
+        <div>
+          <div class="text-2xl font-bold" style="color: var(--cyber-yellow);">100%</div>
+          <div class="text-sm opacity-60">awesome</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ASCII Art -->
+    <div class="mt-8 text-center opacity-30 text-xs leading-tight" style="font-family: monospace;">
+{`
+ ██████╗██╗  ██╗ █████╗ ██████╗  ██████╗ ██╗    ██╗███╗   ██╗
+██╔════╝██║  ██║██╔══██╗██╔══██╗██╔═══██╗██║    ██║████╗  ██║
+███████╗███████║███████║██║  ██║██║   ██║██║ █╗ ██║██╔██╗ ██║
+╚════██║██╔══██║██╔══██║██║  ██║██║   ██║██║███╗██║██║╚██╗██║
+██████╔╝██║  ██║██║  ██║██████╔╝╚██████╔╝╚███╔███╔╝██║ ╚████║
+╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝  ╚═════╝  ╚══╝╚══╝ ╚═╝  ╚══╝
+`}
+    </div>
+  </div>
+</Layout>
+
+<script>
+  // Typewriter effect
+  const lines = [
+    '$ ./welcome.sh',
+    '',
+    '> Initializing TerminalMind...',
+    '> Loading knowledge base... [OK]',
+    '> Loading interview questions... [OK]',
+    '> Starting AI assistant... [OK]',
+    '',
+    '╔══════════════════════════════════════════════════════╗',
+    '║                                                      ║',
+    '║   WELCOME TO TERMINALMIND                           ║',
+    '║   ─────────────────────                              ║',
+    '║   Your personal knowledge base & interview trainer   ║',
+    '║                                                      ║',
+    '║   Type "help" for available commands                ║',
+    '║   Or click the navigation links above               ║',
+    '║                                                      ║',
+    '╚══════════════════════════════════════════════════════╝',
+    '',
+    '$ █'
+  ];
+
+  let lineIndex = 0;
+  let charIndex = 0;
+  const typedContent = document.getElementById('typed-content');
+  
+  function typeWriter() {
+    if (!typedContent) return;
+    
+    if (lineIndex < lines.length) {
+      const currentLine = lines[lineIndex];
+      
+      if (charIndex < currentLine.length) {
+        // Add character with appropriate color
+        const span = document.createElement('span');
+        
+        if (currentLine.startsWith('$')) {
+          span.style.color = 'var(--cyber-green)';
+        } else if (currentLine.startsWith('>')) {
+          span.style.color = 'var(--cyber-cyan)';
+        } else if (currentLine.startsWith('╔') || currentLine.startsWith('║') || currentLine.startsWith('╚')) {
+          span.style.color = 'var(--cyber-purple)';
+        } else if (currentLine === '') {
+          span.innerHTML = '<br>';
+        }
+        
+        if (currentLine === '$ █') {
+          // Blinking cursor at the end
+          span.innerHTML = '$ <span class="cursor" style="color: var(--cyber-green);">█</span>';
+          typedContent.appendChild(span);
+        } else {
+          span.textContent = currentLine[charIndex];
+          typedContent.appendChild(span);
+        }
+        
+        charIndex++;
+        setTimeout(typeWriter, 15);
+      } else {
+        // End of line
+        if (currentLine !== '$ █') {
+          const br = document.createElement('br');
+          typedContent.appendChild(br);
+        }
+        lineIndex++;
+        charIndex = 0;
+        setTimeout(typeWriter, 100);
+      }
+    }
+  }
+
+  // Start typewriter after a short delay
+  setTimeout(typeWriter, 500);
+
+  // Fetch stats
+  async function loadStats() {
+    try {
+      const res = await fetch('/api/stats');
+      const data = await res.json();
+      
+      const docCount = document.getElementById('doc-count');
+      const interviewCount = document.getElementById('interview-count');
+      
+      if (docCount) docCount.textContent = data.knowledgeCount?.toString() || '0';
+      if (interviewCount) interviewCount.textContent = data.interviewCount?.toString() || '0';
+    } catch (e) {
+      // Silently fail, keep dashes
+    }
+  }
+  
+  loadStats();
+</script>

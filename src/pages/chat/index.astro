@@ -1,0 +1,220 @@
+---
+import Layout from '../../layouts/Layout.astro';
+---
+
+<Layout title="AI Chat">
+  <div class="max-w-4xl mx-auto h-[calc(100vh-160px)] flex flex-col">
+    <!-- Chat Header -->
+    <div class="terminal-window mt-4 p-4">
+      <div class="flex items-center gap-4">
+        <span class="text-2xl">🤖</span>
+        <div>
+          <h1 class="text-xl font-bold glow-purple" style="color: var(--cyber-purple);">AI Assistant</h1>
+          <p class="text-sm opacity-60">Ask me anything about the knowledge base</p>
+        </div>
+        <div class="ml-auto flex items-center gap-2">
+          <span class="w-2 h-2 rounded-full" style="background: var(--cyber-green);" id="status-dot"></span>
+          <span class="text-sm opacity-60" id="status-text">Ready</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat Messages -->
+    <div class="terminal-window flex-1 mt-4 flex flex-col overflow-hidden">
+      <div class="terminal-body flex-1 overflow-y-auto p-4 space-y-4" id="chat-messages">
+        <!-- Welcome Message -->
+        <div class="flex gap-3">
+          <span class="text-2xl">🤖</span>
+          <div class="terminal-window p-4 max-w-[80%]">
+            <p class="glow-green">Hello! I'm your AI assistant. Ask me anything about the knowledge base, or we can chat about technical topics.</p>
+            <p class="mt-2 opacity-70">Try questions like:</p>
+            <ul class="mt-2 space-y-1 text-sm opacity-70">
+              <li>• "Explain dependency injection in Spring"</li>
+              <li>• "What is the CAP theorem?"</li>
+              <li>• "How does attention mechanism work?"</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="p-4 border-t border-cyber-green/20">
+        <div class="flex flex-wrap gap-2">
+          <button class="quick-action px-3 py-1 text-sm rounded hover:opacity-100 transition-opacity" 
+                  style="background: rgba(0,255,159,0.1); border: 1px solid var(--cyber-green); color: var(--cyber-green); opacity: 0.7;"
+                  data-prompt="Explain dependency injection in Spring framework">
+            DI in Spring
+          </button>
+          <button class="quick-action px-3 py-1 text-sm rounded hover:opacity-100 transition-opacity"
+                  style="background: rgba(0,212,255,0.1); border: 1px solid var(--cyber-cyan); color: var(--cyber-cyan); opacity: 0.7;"
+                  data-prompt="What is the difference between JVM, JRE, and JDK?">
+            JVM vs JRE vs JDK
+          </button>
+          <button class="quick-action px-3 py-1 text-sm rounded hover:opacity-100 transition-opacity"
+                  style="background: rgba(191,0,255,0.1); border: 1px solid var(--cyber-purple); color: var(--cyber-purple); opacity: 0.7;"
+                  data-prompt="Explain transformer architecture and attention mechanism">
+            Transformers
+          </button>
+        </div>
+      </div>
+
+      <!-- Input Area -->
+      <div class="p-4 border-t border-cyber-green/20">
+        <form id="chat-form" class="flex gap-3">
+          <input 
+            type="text" 
+            id="chat-input"
+            placeholder="Ask a question... (Enter to send, Shift+Enter for new line)"
+            class="flex-1 bg-transparent border p-3 rounded outline-none"
+            style="border-color: rgba(0,255,159,0.3); color: var(--cyber-green);"
+          />
+          <button 
+            type="submit" 
+            class="btn-cyber px-6"
+            id="send-btn"
+          >
+            Send
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<script>
+  interface Message {
+    role: 'user' | 'assistant';
+    content: string;
+  }
+
+  const messages: Message[] = [];
+  const chatMessages = document.getElementById('chat-messages')!;
+  const chatForm = document.getElementById('chat-form') as HTMLFormElement;
+  const chatInput = document.getElementById('chat-input') as HTMLInputElement;
+  const sendBtn = document.getElementById('send-btn')!;
+  const statusDot = document.getElementById('status-dot')!;
+  const statusText = document.getElementById('status-text')!;
+
+  function addMessage(role: 'user' | 'assistant', content: string) {
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'flex gap-3';
+    
+    if (role === 'user') {
+      msgDiv.innerHTML = `
+        <div class="ml-auto terminal-window p-4 max-w-[80%]" style="border-color: var(--cyber-cyan);">
+          <p style="color: var(--cyber-cyan);">${escapeHtml(content)}</p>
+        </div>
+        <span class="text-2xl">👤</span>
+      `;
+    } else {
+      msgDiv.innerHTML = `
+        <span class="text-2xl">🤖</span>
+        <div class="terminal-window p-4 max-w-[80%]">
+          <div class="markdown-content glow-green">${formatContent(content)}</div>
+        </div>
+      `;
+    }
+    
+    chatMessages.appendChild(msgDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    
+    messages.push({ role, content });
+  }
+
+  function escapeHtml(text: string): string {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  function formatContent(content: string): string {
+    // Basic markdown-like formatting
+    return content
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/`([^`]+)`/g, '<code style="background: rgba(0,255,159,0.1); padding: 2px 6px; border-radius: 3px; color: var(--cyber-yellow);">$1</code>')
+      .replace(/\n/g, '<br />');
+  }
+
+  function setStatus(status: 'ready' | 'thinking' | 'error', text: string) {
+    statusText.textContent = text;
+    
+    if (status === 'ready') {
+      statusDot.style.background = 'var(--cyber-green)';
+    } else if (status === 'thinking') {
+      statusDot.style.background = 'var(--cyber-yellow)';
+    } else {
+      statusDot.style.background = 'var(--cyber-red)';
+    }
+  }
+
+  async function handleSubmit() {
+    const text = chatInput.value.trim();
+    if (!text) return;
+    
+    chatInput.value = '';
+    addMessage('user', text);
+    setStatus('thinking', 'Thinking...');
+    sendBtn.disabled = true;
+    
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          messages: messages.concat([{ role: 'user', content: text }])
+        })
+      });
+      
+      const data = await res.json();
+      
+      if (data.error) {
+        addMessage('assistant', `Error: ${data.error}`);
+        setStatus('error', 'Error');
+      } else {
+        addMessage('assistant', data.message);
+        setStatus('ready', 'Ready');
+      }
+    } catch (err) {
+      addMessage('assistant', 'Sorry, I encountered an error. Please try again.');
+      setStatus('error', 'Error');
+    }
+    
+    sendBtn.disabled = false;
+    chatInput.focus();
+  }
+
+  chatForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    handleSubmit();
+  });
+
+  // Quick action buttons
+  document.querySelectorAll('.quick-action').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const prompt = (btn as HTMLElement).dataset.prompt!;
+      chatInput.value = prompt;
+      handleSubmit();
+    });
+  });
+
+  // Focus input on load
+  chatInput.focus();
+</script>
+
+<style>
+  .markdown-content {
+    line-height: 1.7;
+  }
+  
+  .markdown-content :global(strong) {
+    color: var(--cyber-cyan);
+  }
+  
+  .markdown-content :global(code) {
+    background: rgba(0, 255, 159, 0.1);
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: var(--cyber-yellow);
+  }
+</style>

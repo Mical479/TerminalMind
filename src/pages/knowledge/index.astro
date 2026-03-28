@@ -1,0 +1,158 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import fs from 'fs';
+import path from 'path';
+
+interface DocEntry {
+  title: string;
+  slug: string;
+  category: string;
+  path: string;
+}
+
+function getAllDocs(baseDir: string): DocEntry[] {
+  const docs: DocEntry[] = [];
+  
+  if (!fs.existsSync(baseDir)) return docs;
+  
+  function walk(dir: string, category: string = 'root') {
+    const items = fs.readdirSync(dir, { withFileTypes: true });
+    
+    for (const item of items) {
+      const fullPath = path.join(dir, item.name);
+      const ext = path.extname(item.name).toLowerCase();
+      
+      if (item.isDirectory()) {
+        walk(fullPath, item.name);
+      } else if (ext === '.md' || ext === '.mdx') {
+        const slug = item.name.replace(/\.mdx?$/, '');
+        const title = extractTitle(fs.readFileSync(fullPath, 'utf-8'), slug);
+        
+        docs.push({
+          title,
+          slug,
+          category,
+          path: fullPath.replace(process.cwd() + '/public/content/', '')
+        });
+      }
+    }
+  }
+  
+  walk(baseDir);
+  return docs;
+}
+
+function extractTitle(content: string, fallback: string): string {
+  const match = content.match(/^#\s+(.+)$/m);
+  return match ? match[1].trim() : fallback;
+}
+
+const knowledgePath = path.join(process.cwd(), 'public', 'content', 'knowledge');
+const docs = getAllDocs(knowledgePath);
+
+// Group by category
+const grouped = docs.reduce((acc, doc) => {
+  const cat = doc.category || 'uncategorized';
+  if (!acc[cat]) acc[cat] = [];
+  acc[cat].push(doc);
+  return acc;
+}, {} as Record<string, DocEntry[]>);
+
+const categories = Object.keys(grouped).sort();
+---
+
+<Layout title="Knowledge Base">
+  <div class="max-w-6xl mx-auto">
+    <!-- Header -->
+    <div class="terminal-window mt-4 p-6">
+      <div class="flex items-center gap-4 mb-4">
+        <span style="color: var(--cyber-yellow);">📚</span>
+        <h1 class="text-2xl font-bold glow-cyan" style="color: var(--cyber-cyan);">Knowledge Base</h1>
+      </div>
+      <p class="opacity-70">Browse all documents in my knowledge library.</p>
+      <div class="mt-4 text-sm opacity-60">
+        <span style="color: var(--cyber-green);">$ ls -la knowledge/</span>
+        <span class="ml-2">{docs.length} documents found</span>
+      </div>
+    </div>
+
+    <!-- Search -->
+    <div class="terminal-window mt-4 p-4">
+      <div class="flex items-center gap-4">
+        <span style="color: var(--cyber-green);">$</span>
+        <input 
+          type="text" 
+          id="search-input"
+          placeholder="Search documents... (Ctrl+K)"
+          class="flex-1 bg-transparent border-none outline-none text-cyber-green"
+          style="color: var(--cyber-green);"
+        />
+        <kbd class="px-2 py-1 text-xs opacity-50" style="border: 1px solid var(--cyber-green); border-radius: 3px;">Ctrl+K</kbd>
+      </div>
+    </div>
+
+    <!-- Categories & Documents -->
+    {categories.map(category => (
+      <div class="terminal-window mt-6">
+        <div class="terminal-header">
+          <span class="folder text-lg" style="color: var(--cyber-yellow);">📁 {category}/</span>
+        </div>
+        <div class="p-4">
+          <div class="space-y-2">
+            {grouped[category].map(doc => (
+              <a 
+                href={`/knowledge/${doc.path.replace(/\\/g, '/').replace(/\.mdx?$/, '')}`}
+                class="block p-3 hover:bg-cyber-green/5 transition-colors border border-transparent hover:border-cyber-green/30 rounded"
+              >
+                <div class="flex items-center gap-3">
+                  <span style="color: var(--cyber-green);">📄</span>
+                  <span class="glow-green">{doc.title}</span>
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      </div>
+    ))}
+
+    <!-- Empty state -->
+    {docs.length === 0 && (
+      <div class="terminal-window mt-6 p-8 text-center">
+        <div class="text-4xl mb-4">📭</div>
+        <p class="opacity-70">No documents found.</p>
+        <p class="text-sm mt-2 opacity-50">
+          Add markdown files to <code class="px-2 py-1 rounded" style="background: rgba(0,255,159,0.1);">public/content/knowledge/</code>
+        </p>
+      </div>
+    )}
+  </div>
+</Layout>
+
+<script>
+  // Search functionality
+  const searchInput = document.getElementById('search-input') as HTMLInputElement;
+  const docLinks = document.querySelectorAll('.terminal-window a');
+  
+  searchInput?.addEventListener('input', (e) => {
+    const query = (e.target as HTMLInputElement).value.toLowerCase();
+    
+    docLinks.forEach(link => {
+      const text = link.textContent?.toLowerCase() || '';
+      const parent = link.closest('.terminal-window');
+      if (text.includes(query) || query === '') {
+        (parent as HTMLElement)?.removeAttribute('style');
+        link.removeAttribute('hidden');
+      } else {
+        link.setAttribute('hidden', '');
+      }
+    });
+  });
+
+  // Keyboard shortcut
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      e.preventDefault();
+      searchInput?.focus();
+    }
+  });
+</script>

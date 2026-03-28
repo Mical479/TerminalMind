@@ -1,0 +1,394 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import fs from 'fs';
+import path from 'path';
+
+export async function getStaticPaths() {
+  const interviewPath = path.join(process.cwd(), 'public', 'content', 'interview');
+  const paths: { params: { slug: string }; props: { title: string; content: string; breadcrumb: string; questions: any[] } }[] = [];
+
+  function walk(dir: string, baseSlug: string = '') {
+    if (!fs.existsSync(dir)) return;
+
+    const items = fs.readdirSync(dir, { withFileTypes: true });
+
+    for (const item of items) {
+      const fullPath = path.join(dir, item.name);
+      const ext = path.extname(item.name).toLowerCase();
+
+      if (item.isDirectory()) {
+        walk(fullPath, baseSlug ? `${baseSlug}/${item.name}` : item.name);
+      } else if (ext === '.md' || ext === '.mdx') {
+        const slug = item.name.replace(/\.mdx?$/, '');
+        const fullSlug = baseSlug ? `${baseSlug}/${slug}` : slug;
+        const content = fs.readFileSync(fullPath, 'utf-8');
+        const titleMatch = content.match(/^#\s+(.+)$/m);
+        const title = titleMatch ? titleMatch[1].trim() : slug;
+
+        // Parse questions from markdown
+        // Format: ## Question title\nOptions:\n- A) Option\n- B) Option etc.
+        const questions: any[] = [];
+        const questionBlocks = content.split(/^##\s+/m).slice(1);
+        
+        for (const block of questionBlocks) {
+          const lines = block.trim().split('\n');
+          const qTitle = lines[0];
+          const rest = lines.slice(1).join('\n');
+          
+          // Extract options
+          const optionMatches = [...rest.matchAll(/^- ([A-Z])\)\s*(.+)$/gm)];
+          const options: any[] = [];
+          let correctAnswer: string | null = null;
+          
+          for (const match of optionMatches) {
+            const letter = match[1];
+            const text = match[2].replace(/\*\*([^*]+)\*\*/g, '$1').replace('[x]', '').trim();
+            options.push({ letter, text });
+            
+            // Check if marked as correct (original text before removing [x])
+            const originalText = match[2];
+            if (originalText.includes('[x]') || originalText.toLowerCase().includes(`correct: ${letter.toLowerCase()}`)) {
+              correctAnswer = letter;
+            }
+          }
+          
+          // Try to find answer line
+          const answerMatch = rest.match(/\*\*Answer:\*\*\s*([A-Z])/i) || rest.match(/Answer:\s*([A-Z])/i);
+          if (answerMatch && !correctAnswer) {
+            correctAnswer = answerMatch[1].toUpperCase();
+          }
+          
+          if (options.length > 0) {
+            questions.push({
+              question: qTitle,
+              options,
+              answer: correctAnswer
+            });
+          }
+        }
+
+        paths.push({
+          params: { slug: fullSlug },
+          props: { 
+            title: title.replace(/\[.*?\]$/, '').trim(),
+            content,
+            breadcrumb: baseSlug ? baseSlug.split('/').join(' > ') : 'root',
+            questions
+          }
+        });
+      }
+    }
+  }
+
+  walk(interviewPath);
+  return paths;
+}
+
+const { title, content, breadcrumb, questions } = Astro.props;
+
+const totalQuestions = questions.length;
+---
+
+<Layout title={title}>
+  <div class="max-w-4xl mx-auto pb-20">
+    <!-- Breadcrumb -->
+    <div class="terminal-window mt-4 p-4">
+      <div class="flex items-center gap-2 text-sm opacity-70">
+        <a href="/interview" style="color: var(--cyber-purple);">🎯 interview</a>
+        <span>/</span>
+        <span>{breadcrumb}</span>
+        <span>/</span>
+        <span class="glow-purple" style="color: var(--cyber-purple);">{title}</span>
+      </div>
+    </div>
+
+    <!-- Quiz Header -->
+    <div class="terminal-window mt-4 p-6">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h1 class="text-2xl font-bold" style="color: var(--cyber-purple);">{title}</h1>
+          <p class="text-sm opacity-60 mt-1">{totalQuestions} questions</p>
+        </div>
+        <div class="text-right">
+          <div class="text-sm opacity-60">Score</div>
+          <div class="text-3xl font-bold" style="color: var(--cyber-green);" id="score">0</div>
+        </div>
+      </div>
+      
+      <div class="w-full bg-gray-800 rounded-full h-2">
+        <div 
+          class="h-2 rounded-full transition-all duration-300" 
+          style="background: var(--cyber-purple);"
+          id="progress-bar"
+        ></div>
+      </div>
+      <div class="text-right text-sm opacity-60 mt-1">
+        <span id="current-q">1</span> / {totalQuestions}
+      </div>
+    </div>
+
+    <!-- Questions -->
+    <div id="quiz-container">
+      {questions.map((q: any, index: number) => (
+        <div 
+          class="quiz-question terminal-window mt-4" 
+          data-index={index}
+          data-answer={q.answer}
+          style={index === 0 ? '' : 'display: none;'}
+        >
+          <div class="terminal-header">
+            <span style="color: var(--cyber-yellow);">Q{index + 1}:</span>
+            <span class="ml-2">{q.question}</span>
+          </div>
+          <div class="p-4 space-y-2">
+            {q.options.map((opt: any) => (
+              <div 
+                class="quiz-option" 
+                data-letter={opt.letter}
+              >
+                <span class="font-bold mr-2" style="color: var(--cyber-cyan);">{opt.letter})</span>
+                {opt.text}
+              </div>
+            ))}
+          </div>
+          
+          <!-- AI Hint Button -->
+          <div class="p-4 border-t border-cyber-green/20">
+            <button 
+              class="btn-cyber text-sm ai-hint-btn"
+              data-question={q.question}
+              style="border-color: var(--cyber-purple); color: var(--cyber-purple);"
+            >
+              🤖 Ask AI for Hint
+            </button>
+            <div class="ai-hint-result mt-3 p-3 rounded hidden" style="background: rgba(191,0,255,0.1); border: 1px solid var(--cyber-purple);">
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <!-- Navigation -->
+    <div class="flex justify-between mt-6" id="quiz-nav">
+      <button 
+        id="prev-btn" 
+        class="btn-cyber" 
+        disabled
+        style="opacity: 0.3; cursor: not-allowed;"
+      >
+        ← Previous
+      </button>
+      <button 
+        id="next-btn" 
+        class="btn-cyber"
+        disabled
+        style="opacity: 0.3; cursor: not-allowed;"
+      >
+        Next →
+      </button>
+    </div>
+
+    <!-- Complete Screen -->
+    <div id="complete-screen" class="terminal-window mt-4 p-8 text-center" style="display: none;">
+      <div class="text-6xl mb-4">🎉</div>
+      <h2 class="text-2xl font-bold mb-4 glow-green" style="color: var(--cyber-green);">Quiz Complete!</h2>
+      <p class="text-xl mb-4">
+        Your Score: <span id="final-score" class="font-bold" style="color: var(--cyber-cyan);">0</span> / {totalQuestions}
+      </p>
+      <p id="score-message" class="opacity-70 mb-6"></p>
+      <div class="flex justify-center gap-4">
+        <a href="/interview" class="btn-cyber">Back to Topics</a>
+        <button id="retry-btn" class="btn-cyber" style="border-color: var(--cyber-purple); color: var(--cyber-purple);">
+          Try Again
+        </button>
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<script>
+  interface QuizState {
+    currentIndex: number;
+    score: number;
+    answered: Set<number>;
+    answers: Record<number, string>;
+  }
+
+  const state: QuizState = {
+    currentIndex: 0,
+    score: 0,
+    answered: new Set(),
+    answers: {}
+  };
+
+  const questions = document.querySelectorAll('.quiz-question');
+  const totalQuestions = questions.length;
+  const scoreEl = document.getElementById('score')!;
+  const progressBar = document.getElementById('progress-bar')!;
+  const currentQEl = document.getElementById('current-q')!;
+  const prevBtn = document.getElementById('prev-btn') as HTMLButtonElement;
+  const nextBtn = document.getElementById('next-btn') as HTMLButtonElement;
+  const completeScreen = document.getElementById('complete-screen')!;
+  const finalScoreEl = document.getElementById('final-score')!;
+  const scoreMessage = document.getElementById('score-message')!;
+  const quizNav = document.getElementById('quiz-nav')!;
+  const retryBtn = document.getElementById('retry-btn')!;
+
+  function showQuestion(index: number) {
+    questions.forEach((q, i) => {
+      (q as HTMLElement).style.display = i === index ? 'block' : 'none';
+    });
+    
+    currentQEl.textContent = String(index + 1);
+    progressBar.style.width = `${((index + 1) / totalQuestions) * 100}%`;
+    
+    prevBtn.disabled = index === 0;
+    prevBtn.style.opacity = index === 0 ? '0.3' : '1';
+    prevBtn.style.cursor = index === 0 ? 'not-allowed' : 'pointer';
+    
+    // Check if current question is answered
+    const currentQ = questions[index] as HTMLElement;
+    const isAnswered = state.answered.has(index);
+    nextBtn.disabled = !isAnswered;
+    nextBtn.style.opacity = isAnswered ? '1' : '0.3';
+    nextBtn.style.cursor = isAnswered ? 'pointer' : 'not-allowed';
+  }
+
+  function selectAnswer(questionIndex: number, letter: string) {
+    if (state.answered.has(questionIndex)) return;
+    
+    const question = questions[questionIndex] as HTMLElement;
+    const answer = question.dataset.answer!;
+    const options = question.querySelectorAll('.quiz-option');
+    
+    state.answered.add(questionIndex);
+    state.answers[questionIndex] = letter;
+    
+    // Mark correct/incorrect
+    options.forEach(opt => {
+      const optLetter = opt.getAttribute('data-letter')!;
+      if (optLetter === answer) {
+        opt.classList.add('correct');
+      } else if (optLetter === letter && letter !== answer) {
+        opt.classList.add('incorrect');
+      }
+      // Disable further selection
+      (opt as HTMLElement).style.cursor = 'default';
+    });
+    
+    // Update score
+    if (letter === answer) {
+      state.score++;
+      scoreEl.textContent = String(state.score);
+    }
+    
+    // Enable next button
+    nextBtn.disabled = false;
+    nextBtn.style.opacity = '1';
+    nextBtn.style.cursor = 'pointer';
+  }
+
+  function nextQuestion() {
+    if (state.currentIndex < totalQuestions - 1) {
+      state.currentIndex++;
+      showQuestion(state.currentIndex);
+    } else {
+      showComplete();
+    }
+  }
+
+  function prevQuestion() {
+    if (state.currentIndex > 0) {
+      state.currentIndex--;
+      showQuestion(state.currentIndex);
+    }
+  }
+
+  function showComplete() {
+    quizNav.style.display = 'none';
+    completeScreen.style.display = 'block';
+    finalScoreEl.textContent = String(state.score);
+    
+    const percentage = (state.score / totalQuestions) * 100;
+    if (percentage === 100) {
+      scoreMessage.textContent = '🏆 Perfect! You nailed it!';
+    } else if (percentage >= 80) {
+      scoreMessage.textContent = '🌟 Great job! Almost perfect!';
+    } else if (percentage >= 60) {
+      scoreMessage.textContent = '👍 Good effort! Keep practicing!';
+    } else if (percentage >= 40) {
+      scoreMessage.textContent = '💪 Not bad! Review the topics and try again!';
+    } else {
+      scoreMessage.textContent = '📚 Keep learning! You will get better!';
+    }
+  }
+
+  function resetQuiz() {
+    state.currentIndex = 0;
+    state.score = 0;
+    state.answered.clear();
+    state.answers = {};
+    
+    scoreEl.textContent = '0';
+    quizNav.style.display = 'flex';
+    completeScreen.style.display = 'none';
+    
+    // Reset all options
+    questions.forEach(q => {
+      const options = q.querySelectorAll('.quiz-option');
+      options.forEach(opt => {
+        opt.classList.remove('correct', 'incorrect');
+        (opt as HTMLElement).style.cursor = 'pointer';
+      });
+      // Reset AI hints
+      const hintResult = q.querySelector('.ai-hint-result');
+      if (hintResult) {
+        hintResult.classList.add('hidden');
+        hintResult.textContent = '';
+      }
+    });
+    
+    showQuestion(0);
+  }
+
+  // Event listeners
+  questions.forEach((q, index) => {
+    const options = q.querySelectorAll('.quiz-option');
+    options.forEach(opt => {
+      opt.addEventListener('click', () => {
+        selectAnswer(index, opt.getAttribute('data-letter')!);
+      });
+    });
+  });
+
+  nextBtn.addEventListener('click', nextQuestion);
+  prevBtn.addEventListener('click', prevQuestion);
+  retryBtn.addEventListener('click', resetQuiz);
+
+  // AI Hint functionality
+  document.querySelectorAll('.ai-hint-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const button = e.target as HTMLButtonElement;
+      const question = button.dataset.question!;
+      const hintResult = button.nextElementSibling as HTMLElement;
+      
+      hintResult.classList.remove('hidden');
+      hintResult.textContent = '🤖 Thinking...';
+      
+      try {
+        const res = await fetch('/api/ai-hint', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question })
+        });
+        const data = await res.json();
+        hintResult.textContent = `💡 ${data.hint}`;
+      } catch (err) {
+        hintResult.textContent = '❌ Failed to get hint. Please try again.';
+      }
+    });
+  });
+
+  // Initialize
+  showQuestion(0);
+</script>

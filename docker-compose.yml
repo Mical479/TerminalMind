@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  terminal-mind:
+    build: .
+    container_name: terminal-mind
+    ports:
+      - "3000:80"
+    volumes:
+      # Mount config for API keys (create from template)
+      - ./config/site.config.json:/usr/share/nginx/html/config/site.config.json:ro
+      # Mount content for live updates
+      - ./public/content:/usr/share/nginx/html/content:ro
+    environment:
+      - TZ=Asia/Shanghai
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # Optional: Watchtower for auto-updates
+  # watchtower:
+  #   image: containrrr/watchtower
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   command: --interval 86400 terminal-mind
+  #   restart: unless-stopped

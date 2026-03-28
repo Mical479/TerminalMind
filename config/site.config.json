@@ -1,0 +1,20 @@
+{
+  "site": {
+    "name": "TerminalMind",
+    "description": "Knowledge Base & Interview Playground",
+    "url": "https://your-domain.com"
+  },
+  "content": {
+    "knowledgePath": "./content/knowledge",
+    "interviewPath": "./content/interview"
+  },
+  "ai": {
+    "provider": "openclaw",
+    "apiKey": "YOUR_API_KEY_HERE",
+    "endpoint": "http://localhost:8250/api/chat"
+  },
+  "auth": {
+    "user": "admin",
+    "pass": "changeme"
+  }
+}
