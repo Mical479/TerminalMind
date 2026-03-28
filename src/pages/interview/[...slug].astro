@@ -15,6 +15,7 @@ export async function getStaticPaths() {
     const fullPath = path.join(basePath, item.name);
     
     if (item.isDirectory()) continue;
+    if (item.name.toLowerCase() === 'README.md' || item.name.startsWith('.')) continue;
     
     const ext = path.extname(item.name).toLowerCase();
     if (ext !== '.md' && ext !== '.mdx') continue;
@@ -44,48 +45,65 @@ export async function getStaticPaths() {
       });
     }
     
-    // Parse questions
-    const questions: any[] = [];
-    const blocks = body.split(/^##\s+\d+[\.:]?\s*/m).filter(b => b.trim());
+    // Parse knowledge points
+    const knowledgePoints: any[] = [];
+    const sections = body.split(/^##\s+(.+)$/gm).filter(Boolean);
     
-    blocks.forEach((block, index) => {
-      const lines = block.trim().split('\n');
-      const questionText = lines[0].replace(/\*\*/g, '').trim();
-      const rest = lines.slice(1).join('\n');
+    for (let i = 1; i < sections.length; i += 2) {
+      const title = sections[i];
+      const contentBlock = sections[i + 1] || '';
       
-      const optionMatches = rest.matchAll(/^- ([A-Z])\)\s*(.+)$/gm);
-      const options: any[] = [];
-      let explanation: string | undefined;
+      // Extract subsections
+      const subsections: any[] = [];
       
-      for (const m of optionMatches) {
-        const letter = m[1];
-        let text = m[2].trim();
-        const isAnswer = text.includes('**[答案]**') || text.includes('[答案]');
-        text = text.replace(/\*\*\[答案\]\*\*/g, '').replace('[答案]', '').trim();
-        options.push({ letter, text, isAnswer });
+      // Extract ### subsections
+      const subsectionBlocks = contentBlock.split(/^###\s+(.+)$/gm).filter(Boolean);
+      for (let j = 1; j < subsectionBlocks.length; j += 2) {
+        const subTitle = subsectionBlocks[j];
+        const subContent = subsectionBlocks[j + 1] || '';
+        
+        // Extract lists and Q&A
+        const keywords: string[] = [];
+        const qas: { q: string; a: string }[] = [];
+        
+        subContent.split('\n').forEach(line => {
+          // Keywords list
+          const kwMatch = line.match(/^-\s+(.+)/);
+          if (kwMatch) keywords.push(kwMatch[1]);
+          
+          // Q&A format
+          const qaMatch = line.match(/\*\*Q:\s*(.+?)\*\*/);
+          if (qaMatch) {
+            const question = qaMatch[1];
+            const answerLine = line.replace(/\*\*Q:.*?\*\*/, '').replace(/:\s*/, '').trim();
+            qas.push({ q: question, a: answerLine || '待补充' });
+          }
+        });
+        
+        if (subTitle || keywords.length > 0 || qas.length > 0) {
+          subsections.push({
+            title: subTitle,
+            keywords,
+            qas
+          });
+        }
       }
       
-      const explainMatch = rest.match(/\*\*解析：\*\s*(.+?)(?:---|$)/s);
-      if (explainMatch) {
-        explanation = explainMatch[1].trim();
-      }
-      
-      if (options.length > 0) {
-        questions.push({
-          number: index + 1,
-          question: questionText,
-          options,
-          explanation
+      if (title) {
+        knowledgePoints.push({
+          title,
+          content: contentBlock.replace(/^###\s+.+$/gm, '').replace(/^-\s+/gm, '').trim(),
+          subsections
         });
       }
-    });
+    }
 
     paths.push({
       params: { slug },
       props: { 
         title: metadata.title || slug,
         metadata,
-        questions
+        knowledgePoints
       }
     });
   }
@@ -93,7 +111,7 @@ export async function getStaticPaths() {
   return paths;
 }
 
-const { title, metadata, questions } = Astro.props;
+const { title, metadata, knowledgePoints } = Astro.props;
 
 const difficultyConfig: Record<string, { color: string; bg: string; label: string }> = {
   Easy: { color: '#34C759', bg: 'rgba(52, 199, 89, 0.1)', label: '🟢 简单' },
@@ -105,286 +123,494 @@ const diff = difficultyConfig[metadata.difficulty || 'Medium'] || difficultyConf
 ---
 
 <Layout title={title}>
-  <div style="max-width: 900px; margin: 0 auto; padding-bottom: 60px;">
-    <div style="margin-bottom: 24px;">
-      <a href="/interview" style="color: var(--apple-blue); text-decoration: none; font-size: 14px; display: inline-flex; align-items: center; gap: 4px;">
-        ← 返回面试题
-      </a>
-    </div>
-
-    <div class="content-card" style="margin-bottom: 24px;">
-      <div style="padding: 24px;">
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;">
-          <span 
-            style={`color: ${diff.color}; background: ${diff.bg}; padding: 4px 12px; border-radius: 12px; font-size: 13px; font-weight: 600;`}
-          >
+  <div class="interview-container">
+    <!-- Header -->
+    <div class="interview-header">
+      <a href="/interview" class="back-link">← 返回面试题</a>
+      <div class="header-card">
+        <div class="header-meta">
+          <span class="difficulty-badge" style={`color: ${diff.color}; background: ${diff.bg};`}>
             {diff.label}
           </span>
-          <span style="color: var(--text-secondary); font-size: 13px;">{questions.length} 道题</span>
-          {metadata.date && (
-            <span style="color: var(--text-secondary); font-size: 13px;">{metadata.date}</span>
-          )}
+          {metadata.tags && metadata.tags.map((tag: string) => (
+            <span class="tag">#{tag}</span>
+          ))}
         </div>
-        <h1 style="font-size: 24px; font-weight: 700; margin-bottom: 12px;">{title}</h1>
-        {metadata.tags && metadata.tags.length > 0 && (
-          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            {metadata.tags.map((tag: string) => (
-              <span style="background: var(--bg-secondary); color: var(--text-secondary); padding: 4px 10px; border-radius: 8px; font-size: 12px;">
-                #{tag}
-              </span>
-            ))}
-          </div>
-        )}
+        <h1 class="header-title">{title}</h1>
+        <div class="header-date">{metadata.date}</div>
       </div>
     </div>
 
-    <div class="questions-container">
-      {questions.map((q, index) => (
-        <div class="question-card" data-index={index}>
-          <div class="question-header">
-            <span class="question-number">{q.number}</span>
-            <span class="question-text">{q.question}</span>
+    <!-- Cards Grid -->
+    <div class="cards-grid">
+      {knowledgePoints.map((kp: any, index: number) => (
+        <div class="knowledge-card" data-index={index}>
+          <div class="card-header">
+            <span class="card-number">{index + 1}</span>
+            <h2 class="card-title">{kp.title}</h2>
           </div>
           
-          <div class="options-container">
-            {q.options.map(opt => (
-              <div class="option-item" data-letter={opt.letter}>
-                <span class="option-letter">{opt.letter}</span>
-                <span class="option-text">{opt.text}</span>
+          <div class="card-subsections">
+            {kp.subsections.map((sub: any) => (
+              <div class="subsection">
+                {sub.title && <h3 class="subsection-title">{sub.title}</h3>}
+                
+                {sub.keywords && sub.keywords.length > 0 && (
+                  <div class="keywords">
+                    {sub.keywords.map((kw: string) => (
+                      <span class="keyword">{kw}</span>
+                    ))}
+                  </div>
+                )}
+                
+                {sub.qas && sub.qas.length > 0 && (
+                  <div class="qas">
+                    {sub.qas.map((qa: any) => (
+                      <div class="qa-item">
+                        <span class="qa-q">Q: {qa.q}</span>
+                        <span class="qa-a">A: {qa.a}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
           
-          <div class="answer-section" style="display: none;">
-            <div class="answer-reveal">
-              <span class="reveal-label">正确答案：</span>
-              <span class="reveal-answer">{q.options.find((o: any) => o.isAnswer)?.letter}</span>
-            </div>
-            {q.explanation && (
-              <div class="explanation">
-                <span class="explanation-label">💡 解析：</span>
-                <span class="explanation-text">{q.explanation}</span>
-              </div>
-            )}
-          </div>
-          
-          <div class="question-footer">
-            <button class="check-answer-btn" onclick={`toggleAnswer(${index})`}>
-              查看答案 & 解析
-            </button>
-          </div>
+          <button class="expand-btn" onclick="toggleCard(this)">
+            <span class="expand-text">展开详情</span>
+            <svg class="expand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 9l6 6 6-6"/>
+            </svg>
+          </button>
         </div>
       ))}
     </div>
 
-    <div class="content-card" style="margin-top: 24px;">
-      <div style="padding: 20px; text-align: center;">
-        <p style="color: var(--text-secondary); margin-bottom: 12px;">需要 AI 帮你解答疑问？</p>
-        <a href="/chat" class="btn btn-primary">
-          🤖 询问 AI 助手
-        </a>
+    <!-- AI Helper -->
+    <div class="ai-helper">
+      <p>需要更详细的解释？询问 AI 助手</p>
+      <a href="/chat" class="ai-btn">🤖 询问 AI</a>
+    </div>
+  </div>
+
+  <!-- Floating Card Modal -->
+  <div id="card-modal" class="modal" onclick="closeModal(event)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <button class="modal-close" onclick="closeModal()">×</button>
+      <div class="modal-header">
+        <span class="modal-number"></span>
+        <h2 class="modal-title"></h2>
       </div>
+      <div class="modal-body"></div>
     </div>
   </div>
 </Layout>
 
+<script>
+  function toggleCard(btn: HTMLButtonElement) {
+    const card = btn.closest('.knowledge-card') as HTMLElement;
+    const isExpanded = card.classList.contains('expanded');
+    
+    if (isExpanded) {
+      card.classList.remove('expanded');
+      btn.querySelector('.expand-text')!.textContent = '展开详情';
+    } else {
+      card.classList.add('expanded');
+      btn.querySelector('.expand-text')!.textContent = '收起详情';
+    }
+  }
+
+  function openModal(index: number) {
+    const cards = document.querySelectorAll('.knowledge-card');
+    const card = cards[index] as HTMLElement;
+    const modal = document.getElementById('card-modal') as HTMLElement;
+    
+    const number = card.querySelector('.card-number')!.textContent;
+    const title = card.querySelector('.card-title')!.textContent;
+    const content = card.querySelector('.card-subsections')!.innerHTML;
+    
+    modal.querySelector('.modal-number')!.textContent = number;
+    modal.querySelector('.modal-title')!.textContent = title;
+    modal.querySelector('.modal-body')!.innerHTML = content;
+    
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeModal(event?: MouseEvent) {
+    if (event && (event.target as HTMLElement).id !== 'card-modal') return;
+    const modal = document.getElementById('card-modal') as HTMLElement;
+    modal.classList.remove('active');
+    document.body.style.overflow = '';
+  }
+
+  // Make functions available globally
+  (window as any).toggleCard = toggleCard;
+  (window as any).openModal = openModal;
+  (window as any).closeModal = closeModal;
+</script>
+
 <style>
-  .questions-container {
+  .interview-container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 24px;
+    padding-bottom: 80px;
+  }
+
+  .interview-header {
+    margin-bottom: 32px;
+  }
+
+  .back-link {
+    display: inline-block;
+    color: var(--apple-blue);
+    text-decoration: none;
+    font-size: 14px;
+    margin-bottom: 16px;
+  }
+
+  .header-card {
+    background: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    padding: 28px;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--apple-border);
+  }
+
+  .header-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+
+  .difficulty-badge {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .tag {
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+
+  .header-title {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .header-date {
+    color: var(--text-secondary);
+    font-size: 14px;
+  }
+
+  /* Cards Grid */
+  .cards-grid {
     display: flex;
     flex-direction: column;
     gap: 20px;
   }
 
-  .question-card {
+  .knowledge-card {
     background: var(--bg-primary);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-sm);
     border: 1px solid var(--apple-border);
     overflow: hidden;
+    transition: all 0.3s ease;
   }
 
-  .question-header {
+  .knowledge-card:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--apple-blue);
+  }
+
+  .card-header {
     display: flex;
-    gap: 12px;
-    padding: 20px;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 24px;
     background: var(--bg-tertiary);
     border-bottom: 1px solid var(--apple-border);
+    cursor: pointer;
   }
 
-  .question-number {
-    width: 32px;
-    height: 32px;
+  .card-number {
+    width: 36px;
+    height: 36px;
     background: var(--apple-blue);
     color: white;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-weight: 600;
-    font-size: 14px;
+    font-weight: 700;
+    font-size: 16px;
     flex-shrink: 0;
   }
 
-  .question-text {
-    font-size: 16px;
-    font-weight: 500;
-    color: var(--text-primary);
-    line-height: 1.5;
+  .card-title {
+    font-size: 18px;
+    font-weight: 600;
+    flex: 1;
   }
 
-  .options-container {
-    padding: 16px 20px;
+  .card-subsections {
+    padding: 20px 24px;
+    display: none;
+  }
+
+  .knowledge-card.expanded .card-subsections {
+    display: block;
+  }
+
+  .subsection {
+    margin-bottom: 20px;
+  }
+
+  .subsection:last-child {
+    margin-bottom: 0;
+  }
+
+  .subsection-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--apple-blue);
+    margin-bottom: 12px;
+  }
+
+  .keywords {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .keyword {
+    background: rgba(0, 122, 255, 0.1);
+    color: var(--apple-blue);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+  }
+
+  .qas {
     display: flex;
     flex-direction: column;
-    gap: 10px;
-  }
-
-  .option-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 14px 16px;
-    background: var(--bg-tertiary);
-    border-radius: var(--radius-sm);
-    border: 1px solid transparent;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .option-item:hover {
-    border-color: var(--apple-blue);
-    background: rgba(0, 122, 255, 0.04);
-  }
-
-  .option-item.correct {
-    border-color: var(--apple-success);
-    background: rgba(52, 199, 89, 0.08);
-  }
-
-  .option-item.incorrect {
-    border-color: var(--apple-error);
-    background: rgba(255, 59, 48, 0.08);
-  }
-
-  .option-letter {
-    width: 26px;
-    height: 26px;
-    background: var(--bg-secondary);
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: 600;
-    font-size: 13px;
-    color: var(--apple-blue);
-    flex-shrink: 0;
-  }
-
-  .option-item.correct .option-letter {
-    background: var(--apple-success);
-    color: white;
-  }
-
-  .option-item.incorrect .option-letter {
-    background: var(--apple-error);
-    color: white;
-  }
-
-  .option-text {
-    font-size: 15px;
-    color: var(--text-primary);
-    line-height: 1.5;
-  }
-
-  .answer-section {
-    padding: 16px 20px;
-    background: rgba(0, 122, 255, 0.04);
-    border-top: 1px solid rgba(0, 122, 255, 0.1);
-  }
-
-  .answer-reveal {
-    display: flex;
-    align-items: center;
     gap: 8px;
-    margin-bottom: 8px;
   }
 
-  .reveal-label {
-    font-size: 14px;
-    color: var(--text-secondary);
-  }
-
-  .reveal-answer {
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--apple-success);
-  }
-
-  .explanation {
-    font-size: 14px;
-    color: var(--text-secondary);
-    line-height: 1.6;
-  }
-
-  .explanation-label {
-    font-weight: 500;
-  }
-
-  .question-footer {
-    padding: 16px 20px;
-    border-top: 1px solid var(--apple-border);
+  .qa-item {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
   }
 
-  .check-answer-btn {
+  .qa-q {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-primary);
+  }
+
+  .qa-a {
+    font-size: 14px;
+    color: var(--text-secondary);
+  }
+
+  .expand-btn {
+    width: 100%;
+    padding: 14px;
     background: var(--bg-secondary);
-    border: 1px solid var(--apple-border);
-    padding: 10px 20px;
-    border-radius: var(--radius-sm);
+    border: none;
+    border-top: 1px solid var(--apple-border);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
     font-size: 14px;
     color: var(--apple-blue);
-    cursor: pointer;
-    transition: all 0.2s ease;
-    font-weight: 500;
+    transition: background 0.2s;
   }
 
-  .check-answer-btn:hover {
+  .expand-btn:hover {
+    background: var(--bg-tertiary);
+  }
+
+  .expand-icon {
+    width: 18px;
+    height: 18px;
+    transition: transform 0.3s;
+  }
+
+  .knowledge-card.expanded .expand-icon {
+    transform: rotate(180deg);
+  }
+
+  /* AI Helper */
+  .ai-helper {
+    margin-top: 40px;
+    text-align: center;
+    padding: 24px;
+    background: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--apple-border);
+  }
+
+  .ai-helper p {
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+  }
+
+  .ai-btn {
+    display: inline-block;
+    padding: 12px 24px;
     background: var(--apple-blue);
     color: white;
-    border-color: var(--apple-blue);
+    border-radius: var(--radius-sm);
+    text-decoration: none;
+    font-weight: 500;
+    transition: background 0.2s;
   }
-</style>
 
-<script>
-  function toggleAnswer(index: number) {
-    const card = document.querySelector(`[data-index="${index}"]`) as HTMLElement;
-    const answerSection = card.querySelector('.answer-section') as HTMLElement;
-    const btn = card.querySelector('.check-answer-btn') as HTMLButtonElement;
-    
-    if (answerSection.style.display === 'none') {
-      answerSection.style.display = 'block';
-      btn.textContent = '收起答案';
-      
-      const options = card.querySelectorAll('.option-item');
-      const correctLetter = card.querySelector('.reveal-answer')?.textContent;
-      
-      options.forEach(opt => {
-        const letter = opt.getAttribute('data-letter');
-        if (letter === correctLetter) {
-          opt.classList.add('correct');
-        }
-      });
-    } else {
-      answerSection.style.display = 'none';
-      btn.textContent = '查看答案 & 解析';
-      
-      const options = card.querySelectorAll('.option-item');
-      options.forEach(opt => {
-        opt.classList.remove('correct', 'incorrect');
-      });
+  .ai-btn:hover {
+    background: #0066d6;
+  }
+
+  /* Modal */
+  .modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+
+  .modal.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .modal-content {
+    background: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    max-width: 700px;
+    max-height: 80vh;
+    width: 90%;
+    overflow: hidden;
+    transform: translateY(20px);
+    transition: transform 0.3s;
+    position: relative;
+  }
+
+  .modal.active .modal-content {
+    transform: translateY(0);
+  }
+
+  .modal-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: var(--bg-secondary);
+    border-radius: 50%;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    transition: background 0.2s;
+  }
+
+  .modal-close:hover {
+    background: var(--apple-border);
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 24px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--apple-border);
+  }
+
+  .modal-number {
+    width: 40px;
+    height: 40px;
+    background: var(--apple-blue);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 18px;
+  }
+
+  .modal-title {
+    font-size: 20px;
+    font-weight: 600;
+    flex: 1;
+  }
+
+  .modal-body {
+    padding: 24px;
+    overflow-y: auto;
+    max-height: calc(80vh - 100px);
+  }
+
+  .modal-body .subsection {
+    margin-bottom: 24px;
+  }
+
+  .modal-body .subsection:last-child {
+    margin-bottom: 0;
+  }
+
+  .modal-body .keywords {
+    margin-top: 8px;
+  }
+
+  @media (max-width: 768px) {
+    .interview-container {
+      padding: 16px;
+    }
+
+    .header-card {
+      padding: 20px;
+    }
+
+    .header-title {
+      font-size: 22px;
+    }
+
+    .card-header {
+      padding: 16px;
+    }
+
+    .card-title {
+      font-size: 16px;
     }
   }
-
-  (window as any).toggleAnswer = toggleAnswer;
-</script>
+</style>
