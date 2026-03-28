@@ -28,7 +28,7 @@ export async function getStaticPaths() {
         walk(fullPath, baseSlug ? `${baseSlug}/${item.name}` : item.name);
       } else {
         const lowerName = item.name.toLowerCase();
-        if (lowerName === 'readme.md' || lowerName === 'index.md') continue;
+        if (lowerName === 'readme.md' || lowerName === 'index.md' || item.name.startsWith('CLAUDE')) continue;
         
         const ext = path.extname(item.name).toLowerCase();
         if (ext === '.md' || ext === '.mdx') {
