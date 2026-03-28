@@ -13,7 +13,7 @@ interface KnowledgeConfig {
 const defaultConfig: KnowledgeConfig = {
   basePath: '/home/ubuntu/my_knowledge',
   showDirs: [],
-  excludeDirs: ['.obsidian', '.git', 'Excalidraw', 'Prompt', '公众号'],
+  excludeDirs: ['.obsidian', '.git', '.claude'],
   title: '知识库'
 };
 
@@ -77,6 +77,10 @@ export async function getStaticPaths() {
       if (item.isDirectory()) {
         walk(fullPath, baseSlug ? `${baseSlug}/${item.name}` : item.name);
       } else {
+        const lowerName = item.name.toLowerCase();
+        // Skip README and index files
+        if (lowerName === 'readme.md' || lowerName === 'index.md') continue;
+        
         const ext = path.extname(item.name).toLowerCase();
         if (ext === '.md' || ext === '.mdx') {
           const slug = item.name.replace(/\.mdx?$/, '');
