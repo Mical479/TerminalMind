@@ -20,62 +20,57 @@ const currentPath = Astro.url.pathname;
     <meta name="description" content={description} />
     <title>{title} | TerminalMind</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   </head>
-  <body class="crt scanlines">
-    <!-- Matrix Rain Background -->
-    <canvas id="matrix" class="matrix-bg"></canvas>
-
+  <body>
     <!-- Header -->
-    <header class="fixed top-0 left-0 right-0 z-50 bg-[#0a0a0f]/90 backdrop-blur-sm border-b border-cyber-green/20">
-      <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
-        <a href="/" class="text-xl font-bold glow-green" style="color: var(--cyber-green);">
-          TerminalMind_</a>
+    <header class="header">
+      <div class="header-content">
+        <a href="/" class="logo">TerminalMind</a>
         
-        <nav class="flex items-center gap-2">
+        <nav class="nav">
           <a 
             href="/" 
-            class:list={["nav-link", { "border-cyan-400 text-cyan-400 shadow-[0_0_10px_rgba(0,212,255,0.3)]": currentPath === "/" }]}
+            class:list={["nav-link", { active: currentPath === "/" }]}
           >
-            ~/home
+            首页
           </a>
           <a 
             href="/knowledge" 
-            class:list={["nav-link", { "border-cyan-400 text-cyan-400 shadow-[0_0_10px_rgba(0,212,255,0.3)]": currentPath.startsWith("/knowledge") }]}
+            class:list={["nav-link", { active: currentPath.startsWith("/knowledge") }]}
           >
-            📚 knowledge
+            知识库
           </a>
           <a 
             href="/interview" 
-            class:list={["nav-link", { "border-cyan-400 text-cyan-400 shadow-[0_0_10px_rgba(0,212,255,0.3)]": currentPath.startsWith("/interview") }]}
+            class:list={["nav-link", { active: currentPath.startsWith("/interview") }]}
           >
-            🎯 interview
+            面试题
           </a>
           <a 
             href="/chat" 
-            class:list={["nav-link", { "border-cyan-400 text-cyan-400 shadow-[0_0_10px_rgba(0,212,255,0.3)]": currentPath === "/chat" }]}
+            class:list={["nav-link", { active: currentPath === "/chat" }]}
           >
-            🤖 ai_chat
+            AI 对话
           </a>
         </nav>
 
-        <div class="text-sm opacity-60" style="color: var(--cyber-green);">
+        <div class="text-sm" style="color: var(--text-secondary);">
           <span id="time"></span>
         </div>
       </div>
     </header>
 
     <!-- Main Content -->
-    <main class="pt-20 pb-10 px-4 min-h-screen">
+    <main class="main">
       <slot />
     </main>
 
     <!-- Footer -->
-    <footer class="fixed bottom-0 left-0 right-0 bg-[#0a0a0f]/90 border-t border-cyber-green/20 py-2">
-      <div class="max-w-7xl mx-auto px-4 text-center text-sm opacity-60" style="color: var(--cyber-green);">
-        <span>TerminalMind v1.0 | Powered by OpenClaw AI | </span>
-        <span id="uptime"></span>
-      </div>
+    <footer class="footer">
+      <p>TerminalMind v1.0 | Powered by OpenClaw AI</p>
     </footer>
   </body>
 </html>
@@ -85,69 +80,16 @@ const currentPath = Astro.url.pathname;
 </style>
 
 <script>
-  // Time display
   function updateTime() {
     const now = new Date();
     const timeStr = now.toLocaleString('zh-CN', { 
       hour12: false, 
       hour: '2-digit', 
-      minute: '2-digit', 
-      second: '2-digit'
+      minute: '2-digit'
     });
     const timeEl = document.getElementById('time');
     if (timeEl) timeEl.textContent = timeStr;
   }
   updateTime();
-  setInterval(updateTime, 1000);
-
-  // Uptime display
-  const startTime = Date.now();
-  function updateUptime() {
-    const elapsed = Date.now() - startTime;
-    const seconds = Math.floor(elapsed / 1000);
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
-    const uptimeEl = document.getElementById('uptime');
-    if (uptimeEl) uptimeEl.textContent = `uptime: ${h}h ${m}m ${s}s`;
-  }
-  updateUptime();
-  setInterval(updateUptime, 1000);
-
-  // Matrix rain effect
-  const canvas = document.getElementById('matrix') as HTMLCanvasElement;
-  if (canvas) {
-    const ctx = canvas.getContext('2d');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-
-    const chars = '01アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン';
-    const fontSize = 14;
-    const columns = canvas.width / fontSize;
-    const drops: number[] = Array(Math.floor(columns)).fill(1);
-
-    function drawMatrix() {
-      if (!ctx) return;
-      ctx.fillStyle = 'rgba(10, 10, 15, 0.05)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#00ff9f';
-      ctx.font = `${fontSize}px JetBrains Mono`;
-
-      for (let i = 0; i < drops.length; i++) {
-        const char = chars[Math.floor(Math.random() * chars.length)];
-        ctx.fillText(char, i * fontSize, drops[i] * fontSize);
-        if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
-          drops[i] = 0;
-        }
-        drops[i]++;
-      }
-    }
-
-    setInterval(drawMatrix, 50);
-
-    window.addEventListener('resize', () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    });
-  }
+  setInterval(updateTime, 60000);
 </script>

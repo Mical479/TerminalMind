@@ -2,81 +2,64 @@
 import Layout from '../../layouts/Layout.astro';
 ---
 
-<Layout title="AI Chat">
-  <div class="max-w-4xl mx-auto h-[calc(100vh-160px)] flex flex-col">
+<Layout title="AI 对话">
+  <div class="chat-container">
     <!-- Chat Header -->
-    <div class="terminal-window mt-4 p-4">
-      <div class="flex items-center gap-4">
-        <span class="text-2xl">🤖</span>
-        <div>
-          <h1 class="text-xl font-bold glow-purple" style="color: var(--cyber-purple);">AI Assistant</h1>
-          <p class="text-sm opacity-60">Ask me anything about the knowledge base</p>
-        </div>
-        <div class="ml-auto flex items-center gap-2">
-          <span class="w-2 h-2 rounded-full" style="background: var(--cyber-green);" id="status-dot"></span>
-          <span class="text-sm opacity-60" id="status-text">Ready</span>
-        </div>
+    <div class="chat-header">
+      <span style="font-size: 28px;">🤖</span>
+      <div>
+        <h1 style="font-size: 18px; font-weight: 600;">AI 助手</h1>
+        <p style="font-size: 13px; color: var(--text-secondary);">基于知识库的智能问答</p>
+      </div>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 8px;">
+        <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--apple-success);"></span>
+        <span style="font-size: 13px; color: var(--text-secondary);" id="status-text">在线</span>
       </div>
     </div>
 
     <!-- Chat Messages -->
-    <div class="terminal-window flex-1 mt-4 flex flex-col overflow-hidden">
-      <div class="terminal-body flex-1 overflow-y-auto p-4 space-y-4" id="chat-messages">
-        <!-- Welcome Message -->
-        <div class="flex gap-3">
-          <span class="text-2xl">🤖</span>
-          <div class="terminal-window p-4 max-w-[80%]">
-            <p class="glow-green">Hello! I'm your AI assistant. Ask me anything about the knowledge base, or we can chat about technical topics.</p>
-            <p class="mt-2 opacity-70">Try questions like:</p>
-            <ul class="mt-2 space-y-1 text-sm opacity-70">
-              <li>• "Explain dependency injection in Spring"</li>
-              <li>• "What is the CAP theorem?"</li>
-              <li>• "How does attention mechanism work?"</li>
-            </ul>
-          </div>
+    <div class="chat-messages" id="chat-messages">
+      <!-- Welcome Message -->
+      <div class="chat-message assistant">
+        <span style="font-size: 28px;">🤖</span>
+        <div class="chat-bubble">
+          <p style="margin-bottom: 12px;">你好！我是你的 AI 助手，可以回答关于知识库的问题，也可以聊聊技术话题。</p>
+          <p style="margin-bottom: 8px; font-size: 13px; color: var(--text-secondary);">试试这些问题：</p>
+          <ul style="font-size: 13px; color: var(--text-secondary); padding-left: 16px;">
+            <li>解释 Spring 的依赖注入</li>
+            <li>什么是 Transformer 架构？</li>
+            <li>JVM 内存模型是怎样的？</li>
+          </ul>
         </div>
       </div>
+    </div>
 
-      <!-- Quick Actions -->
-      <div class="p-4 border-t border-cyber-green/20">
-        <div class="flex flex-wrap gap-2">
-          <button class="quick-action px-3 py-1 text-sm rounded hover:opacity-100 transition-opacity" 
-                  style="background: rgba(0,255,159,0.1); border: 1px solid var(--cyber-green); color: var(--cyber-green); opacity: 0.7;"
-                  data-prompt="Explain dependency injection in Spring framework">
-            DI in Spring
-          </button>
-          <button class="quick-action px-3 py-1 text-sm rounded hover:opacity-100 transition-opacity"
-                  style="background: rgba(0,212,255,0.1); border: 1px solid var(--cyber-cyan); color: var(--cyber-cyan); opacity: 0.7;"
-                  data-prompt="What is the difference between JVM, JRE, and JDK?">
-            JVM vs JRE vs JDK
-          </button>
-          <button class="quick-action px-3 py-1 text-sm rounded hover:opacity-100 transition-opacity"
-                  style="background: rgba(191,0,255,0.1); border: 1px solid var(--cyber-purple); color: var(--cyber-purple); opacity: 0.7;"
-                  data-prompt="Explain transformer architecture and attention mechanism">
-            Transformers
-          </button>
-        </div>
+    <!-- Quick Actions -->
+    <div style="padding: 12px 24px; border-top: 1px solid var(--apple-border); background: var(--bg-tertiary);">
+      <div class="quick-actions">
+        <button class="quick-action" data-prompt="解释依赖注入（DI）在 Spring 框架中的实现">
+          💉 Spring DI
+        </button>
+        <button class="quick-action" data-prompt="JVM 和 JRE、JDK 的区别是什么？">
+          ☕ JVM vs JRE
+        </button>
+        <button class="quick-action" data-prompt="解释 Transformer 的注意力机制">
+          🧠 Transformer
+        </button>
       </div>
+    </div>
 
-      <!-- Input Area -->
-      <div class="p-4 border-t border-cyber-green/20">
-        <form id="chat-form" class="flex gap-3">
-          <input 
-            type="text" 
-            id="chat-input"
-            placeholder="Ask a question... (Enter to send, Shift+Enter for new line)"
-            class="flex-1 bg-transparent border p-3 rounded outline-none"
-            style="border-color: rgba(0,255,159,0.3); color: var(--cyber-green);"
-          />
-          <button 
-            type="submit" 
-            class="btn-cyber px-6"
-            id="send-btn"
-          >
-            Send
-          </button>
-        </form>
-      </div>
+    <!-- Input Area -->
+    <div class="chat-input-area">
+      <input 
+        type="text" 
+        id="chat-input"
+        class="chat-input"
+        placeholder="输入你的问题..."
+      />
+      <button id="send-btn" class="btn btn-primary" style="padding: 12px 20px;">
+        发送
+      </button>
     </div>
   </div>
 </Layout>
@@ -89,31 +72,21 @@ import Layout from '../../layouts/Layout.astro';
 
   const messages: Message[] = [];
   const chatMessages = document.getElementById('chat-messages')!;
-  const chatForm = document.getElementById('chat-form') as HTMLFormElement;
-  const chatInput = document.getElementById('chat-input') as HTMLInputElement;
+  const chatForm = document.getElementById('chat-input') as HTMLInputElement;
   const sendBtn = document.getElementById('send-btn')!;
-  const statusDot = document.getElementById('status-dot')!;
-  const statusText = document.getElementById('status-text')!;
 
   function addMessage(role: 'user' | 'assistant', content: string) {
     const msgDiv = document.createElement('div');
-    msgDiv.className = 'flex gap-3';
+    msgDiv.className = `chat-message ${role}`;
     
-    if (role === 'user') {
-      msgDiv.innerHTML = `
-        <div class="ml-auto terminal-window p-4 max-w-[80%]" style="border-color: var(--cyber-cyan);">
-          <p style="color: var(--cyber-cyan);">${escapeHtml(content)}</p>
-        </div>
-        <span class="text-2xl">👤</span>
-      `;
-    } else {
-      msgDiv.innerHTML = `
-        <span class="text-2xl">🤖</span>
-        <div class="terminal-window p-4 max-w-[80%]">
-          <div class="markdown-content glow-green">${formatContent(content)}</div>
-        </div>
-      `;
-    }
+    const icon = role === 'user' ? '👤' : '🤖';
+    
+    msgDiv.innerHTML = `
+      <span style="font-size: 28px;">${icon}</span>
+      <div class="chat-bubble">
+        <p style="white-space: pre-wrap; line-height: 1.6;">${escapeHtml(content)}</p>
+      </div>
+    `;
     
     chatMessages.appendChild(msgDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
@@ -127,34 +100,18 @@ import Layout from '../../layouts/Layout.astro';
     return div.innerHTML;
   }
 
-  function formatContent(content: string): string {
-    // Basic markdown-like formatting
-    return content
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.+?)\*/g, '<em>$1</em>')
-      .replace(/`([^`]+)`/g, '<code style="background: rgba(0,255,159,0.1); padding: 2px 6px; border-radius: 3px; color: var(--cyber-yellow);">$1</code>')
-      .replace(/\n/g, '<br />');
+  function setStatus(text: string) {
+    const statusEl = document.getElementById('status-text');
+    if (statusEl) statusEl.textContent = text;
   }
 
-  function setStatus(status: 'ready' | 'thinking' | 'error', text: string) {
-    statusText.textContent = text;
-    
-    if (status === 'ready') {
-      statusDot.style.background = 'var(--cyber-green)';
-    } else if (status === 'thinking') {
-      statusDot.style.background = 'var(--cyber-yellow)';
-    } else {
-      statusDot.style.background = 'var(--cyber-red)';
-    }
-  }
-
-  async function handleSubmit() {
-    const text = chatInput.value.trim();
+  async function handleSend() {
+    const text = chatForm.value.trim();
     if (!text) return;
     
-    chatInput.value = '';
+    chatForm.value = '';
     addMessage('user', text);
-    setStatus('thinking', 'Thinking...');
+    setStatus('思考中...');
     sendBtn.disabled = true;
     
     try {
@@ -169,52 +126,35 @@ import Layout from '../../layouts/Layout.astro';
       const data = await res.json();
       
       if (data.error) {
-        addMessage('assistant', `Error: ${data.error}`);
-        setStatus('error', 'Error');
+        addMessage('assistant', `错误: ${data.error}`);
       } else {
         addMessage('assistant', data.message);
-        setStatus('ready', 'Ready');
       }
-    } catch (err) {
-      addMessage('assistant', 'Sorry, I encountered an error. Please try again.');
-      setStatus('error', 'Error');
+    } catch {
+      addMessage('assistant', '抱歉，遇到了一些问题，请稍后再试。');
     }
     
     sendBtn.disabled = false;
-    chatInput.focus();
+    setStatus('在线');
+    chatForm.focus();
   }
 
-  chatForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    handleSubmit();
+  sendBtn.addEventListener('click', handleSend);
+  chatForm.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
   });
 
-  // Quick action buttons
+  // Quick actions
   document.querySelectorAll('.quick-action').forEach(btn => {
     btn.addEventListener('click', () => {
       const prompt = (btn as HTMLElement).dataset.prompt!;
-      chatInput.value = prompt;
-      handleSubmit();
+      chatForm.value = prompt;
+      handleSend();
     });
   });
 
-  // Focus input on load
-  chatInput.focus();
+  chatForm.focus();
 </script>
-
-<style>
-  .markdown-content {
-    line-height: 1.7;
-  }
-  
-  .markdown-content :global(strong) {
-    color: var(--cyber-cyan);
-  }
-  
-  .markdown-content :global(code) {
-    background: rgba(0, 255, 159, 0.1);
-    padding: 2px 6px;
-    border-radius: 3px;
-    color: var(--cyber-yellow);
-  }
-</style>

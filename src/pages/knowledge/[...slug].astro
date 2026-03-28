@@ -3,8 +3,37 @@ import Layout from '../../layouts/Layout.astro';
 import fs from 'fs';
 import path from 'path';
 
+interface KnowledgeConfig {
+  basePath: string;
+  showDirs: string[];
+  excludeDirs: string[];
+  title: string;
+}
+
+const defaultConfig: KnowledgeConfig = {
+  basePath: '/home/ubuntu/my_knowledge',
+  showDirs: [],
+  excludeDirs: ['.obsidian', '.git', 'Excalidraw', 'Prompt', '公众号'],
+  title: '知识库'
+};
+
+function getConfig(): KnowledgeConfig {
+  try {
+    const configPath = path.join(process.cwd(), 'config', 'site.config.json');
+    if (fs.existsSync(configPath)) {
+      const configData = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      return { ...defaultConfig, ...configData.knowledge };
+    }
+  } catch (e) {
+    console.error('Failed to load config:', e);
+  }
+  return defaultConfig;
+}
+
 export async function getStaticPaths() {
-  const knowledgePath = path.join(process.cwd(), 'public', 'content', 'knowledge');
+  const config = getConfig();
+  const basePath = config.basePath;
+  
   const paths: { params: { slug: string }; props: { title: string; content: string; breadcrumb: string } }[] = [];
 
   function walk(dir: string, baseSlug: string = '') {
@@ -14,59 +43,59 @@ export async function getStaticPaths() {
 
     for (const item of items) {
       const fullPath = path.join(dir, item.name);
-      const ext = path.extname(item.name).toLowerCase();
+      
+      // 排除指定目录
+      if (config.excludeDirs.includes(item.name)) continue;
+      
+      // 如果 showDirs 不为空，则只显示指定目录
+      if (config.showDirs.length > 0 && !config.showDirs.includes(item.name) && item.isDirectory()) {
+        continue;
+      }
 
       if (item.isDirectory()) {
         walk(fullPath, baseSlug ? `${baseSlug}/${item.name}` : item.name);
-      } else if (ext === '.md' || ext === '.mdx') {
-        const slug = item.name.replace(/\.mdx?$/, '');
-        const fullSlug = baseSlug ? `${baseSlug}/${slug}` : slug;
-        const content = fs.readFileSync(fullPath, 'utf-8');
-        const titleMatch = content.match(/^#\s+(.+)$/m);
-        const title = titleMatch ? titleMatch[1].trim() : slug;
+      } else {
+        const ext = path.extname(item.name).toLowerCase();
+        if (ext === '.md' || ext === '.mdx') {
+          const slug = item.name.replace(/\.mdx?$/, '');
+          const fullSlug = baseSlug ? `${baseSlug}/${slug}` : slug;
+          const content = fs.readFileSync(fullPath, 'utf-8');
+          const titleMatch = content.match(/^#\s+(.+)$/m);
+          const title = titleMatch ? titleMatch[1].trim() : slug;
 
-        paths.push({
-          params: { slug: fullSlug },
-          props: { 
-            title, 
-            content,
-            breadcrumb: baseSlug ? baseSlug.split('/').join(' > ') : 'root'
-          }
-        });
+          paths.push({
+            params: { slug: fullSlug },
+            props: { 
+              title, 
+              content,
+              breadcrumb: baseSlug ? baseSlug.split('/').join(' > ') : 'root'
+            }
+          });
+        }
       }
     }
   }
 
-  walk(knowledgePath);
+  walk(basePath);
   return paths;
 }
 
 const { title, content, breadcrumb } = Astro.props;
 
-// Simple markdown to HTML conversion
 function renderMarkdown(md: string): string {
   return md
-    // Headers
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/^## (.+)$/gm, '<h2>$1</h2>')
     .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-    // Bold & Italic
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    // Code blocks
-    .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code class="language-$1">$2</code></pre>')
-    // Inline code
+    .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
     .replace(/`([^`]+)`/g, '<code>$1</code>')
-    // Links
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color: var(--cyber-cyan);">$1</a>')
-    // Lists
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color: var(--apple-blue);">$1</a>')
     .replace(/^- (.+)$/gm, '<li>$1</li>')
     .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
-    // Blockquotes
     .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
-    // Paragraphs
     .replace(/\n\n/g, '</p><p>')
-    // Line breaks
     .replace(/\n/g, '<br />');
 }
 
@@ -74,67 +103,110 @@ const htmlContent = renderMarkdown(content);
 ---
 
 <Layout title={title}>
-  <div class="max-w-4xl mx-auto">
+  <div style="max-width: 800px; margin: 0 auto;">
     <!-- Breadcrumb -->
-    <div class="terminal-window mt-4 p-4">
-      <div class="flex items-center gap-2 text-sm opacity-70">
-        <a href="/knowledge" style="color: var(--cyber-cyan);">📚 knowledge</a>
-        <span>/</span>
-        <span>{breadcrumb}</span>
-        <span>/</span>
-        <span class="glow-green" style="color: var(--cyber-green);">{title}</span>
+    <div style="margin-bottom: 24px;">
+      <a href="/knowledge" style="color: var(--apple-blue); text-decoration: none; font-size: 14px; display: inline-flex; align-items: center; gap: 4px;">
+        ← 返回知识库
+      </a>
+    </div>
+
+    <!-- Content Card -->
+    <div class="content-card">
+      <div style="padding: 20px 24px; border-bottom: 1px solid var(--apple-border);">
+        <div style="font-size: 13px; color: var(--text-secondary); margin-bottom: 4px;">
+          {breadcrumb}
+        </div>
+        <h1 style="font-size: 24px; font-weight: 700;">{title}</h1>
+      </div>
+      <div class="content-body">
+        <div class="markdown" set:html={htmlContent} />
       </div>
     </div>
 
-    <!-- Document -->
-    <article class="terminal-window mt-4">
-      <div class="terminal-header">
-        <div class="terminal-dot dot-red"></div>
-        <div class="terminal-dot dot-yellow"></div>
-        <div class="terminal-dot dot-green"></div>
-        <span class="ml-4 text-sm opacity-70">{title}</span>
-      </div>
-      <div class="terminal-body p-6">
-        <div class="markdown-content" set:html={htmlContent} />
-      </div>
-    </article>
-
-    <!-- Navigation -->
-    <div class="flex justify-between mt-6">
-      <a href="/knowledge" class="btn-cyber">
-        ← Back to Knowledge Base
-      </a>
-      <a href="/chat" class="btn-cyber" style="border-color: var(--cyber-purple); color: var(--cyber-purple);">
-        Ask AI about this →
-      </a>
+    <!-- Actions -->
+    <div style="margin-top: 24px; display: flex; gap: 12px;">
+      <a href="/knowledge" class="btn btn-secondary">← 返回列表</a>
+      <a href="/chat" class="btn btn-primary">💬 询问 AI</a>
     </div>
   </div>
 </Layout>
 
 <style>
-  .markdown-content {
+  .markdown {
     line-height: 1.8;
+    font-size: 16px;
   }
   
-  .markdown-content :global(h1),
-  .markdown-content :global(h2),
-  .markdown-content :global(h3) {
-    margin-top: 1.5em;
-    margin-bottom: 0.5em;
+  .markdown :global(h1) {
+    font-size: 26px;
+    font-weight: 700;
+    margin-top: 32px;
+    margin-bottom: 16px;
   }
   
-  .markdown-content :global(pre) {
-    background: rgba(0, 0, 0, 0.5);
-    padding: 1rem;
-    border-radius: 0.5rem;
+  .markdown :global(h2) {
+    font-size: 20px;
+    font-weight: 600;
+    margin-top: 28px;
+    margin-bottom: 12px;
+  }
+  
+  .markdown :global(h3) {
+    font-size: 17px;
+    font-weight: 600;
+    margin-top: 20px;
+    margin-bottom: 8px;
+  }
+  
+  .markdown :global(p) {
+    margin-bottom: 16px;
+  }
+  
+  .markdown :global(ul), .markdown :global(ol) {
+    padding-left: 24px;
+    margin-bottom: 16px;
+  }
+  
+  .markdown :global(li) {
+    margin-bottom: 8px;
+  }
+  
+  .markdown :global(pre) {
+    background: var(--bg-secondary);
+    padding: 16px;
+    border-radius: 8px;
     overflow-x: auto;
-    margin: 1em 0;
+    margin: 16px 0;
   }
   
-  .markdown-content :global(blockquote) {
-    border-left: 3px solid var(--cyber-purple);
-    padding-left: 1em;
-    margin: 1em 0;
-    color: var(--cyber-purple);
+  .markdown :global(code) {
+    font-family: 'SF Mono', Monaco, Consolas, monospace;
+    font-size: 14px;
+  }
+  
+  .markdown :global(blockquote) {
+    border-left: 4px solid var(--apple-blue);
+    padding-left: 16px;
+    margin: 16px 0;
+    color: var(--text-secondary);
+  }
+  
+  .markdown :global(table) {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+  }
+  
+  .markdown :global(th),
+  .markdown :global(td) {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--apple-border);
+  }
+  
+  .markdown :global(th) {
+    font-weight: 600;
+    background: var(--bg-secondary);
   }
 </style>

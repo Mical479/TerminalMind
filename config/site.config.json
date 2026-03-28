@@ -2,11 +2,25 @@
   "site": {
     "name": "TerminalMind",
     "description": "Knowledge Base & Interview Playground",
-    "url": "https://your-domain.com"
+    "url": "http://localhost:4321"
   },
-  "content": {
-    "knowledgePath": "./content/knowledge",
-    "interviewPath": "./content/interview"
+  "knowledge": {
+    "basePath": "/home/ubuntu/my_knowledge",
+    "showDirs": [
+      "AI学习"
+    ],
+    "excludeDirs": [
+      ".obsidian",
+      ".git",
+      "Excalidraw",
+      "Prompt",
+      "公众号"
+    ],
+    "title": "知识库"
+  },
+  "interview": {
+    "basePath": "./content/interview",
+    "title": "面试题"
   },
   "ai": {
     "provider": "openclaw",

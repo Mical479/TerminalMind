@@ -2,164 +2,98 @@
 import Layout from '../layouts/Layout.astro';
 ---
 
-<Layout title="Home">
-  <div class="max-w-4xl mx-auto">
-    <!-- Terminal Welcome -->
-    <div class="terminal-window mt-8">
-      <div class="terminal-header">
-        <div class="terminal-dot dot-red"></div>
-        <div class="terminal-dot dot-yellow"></div>
-        <div class="terminal-dot dot-green"></div>
-        <span class="ml-4 text-sm opacity-70">welcome.sh</span>
-      </div>
-      <div class="terminal-body" id="terminal-output">
-        <div id="typed-content"></div>
-      </div>
-    </div>
-
-    <!-- Quick Actions -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-      <a href="/knowledge" class="terminal-window p-6 hover:border-cyan-400 transition-all duration-300 group">
-        <div class="text-3xl mb-3">📚</div>
-        <h3 class="text-lg font-bold mb-2 glow-cyan" style="color: var(--cyber-cyan);">Knowledge Base</h3>
-        <p class="text-sm opacity-70">Browse my knowledge library. Java, AI, Architecture, and more...</p>
-        <div class="mt-4 text-sm opacity-50 group-hover:opacity-100 transition-opacity">
-          <span style="color: var(--cyber-green);">→ cd knowledge/</span>
-        </div>
+<Layout title="首页">
+  <!-- Hero Section -->
+  <div class="hero-card fade-in">
+    <h1 class="hero-title">TerminalMind</h1>
+    <p class="hero-subtitle">知识库与面试题练习平台</p>
+    <div style="display: flex; gap: 12px; justify-content: center;">
+      <a href="/knowledge" class="btn btn-primary">
+        📚 开始探索
       </a>
-
-      <a href="/interview" class="terminal-window p-6 hover:border-cyan-400 transition-all duration-300 group">
-        <div class="text-3xl mb-3">🎯</div>
-        <h3 class="text-lg font-bold mb-2 glow-purple" style="color: var(--cyber-purple);">Interview Mode</h3>
-        <p class="text-sm opacity-70">Challenge yourself with interview questions. AI-powered feedback!</p>
-        <div class="mt-4 text-sm opacity-50 group-hover:opacity-100 transition-opacity">
-          <span style="color: var(--cyber-green);">→ ./start_interview.sh</span>
-        </div>
-      </a>
-
-      <a href="/chat" class="terminal-window p-6 hover:border-cyan-400 transition-all duration-300 group">
-        <div class="text-3xl mb-3">🤖</div>
-        <h3 class="text-lg font-bold mb-2" style="color: var(--cyber-yellow);">AI Chat</h3>
-        <p class="text-sm opacity-70">Chat with AI about my knowledge base. Ask anything!</p>
-        <div class="mt-4 text-sm opacity-50 group-hover:opacity-100 transition-opacity">
-          <span style="color: var(--cyber-green);">→ python ai_chat.py</span>
-        </div>
+      <a href="/interview" class="btn btn-secondary">
+        🎯 面试练习
       </a>
     </div>
+  </div>
 
-    <!-- Stats -->
-    <div class="terminal-window mt-8 p-6">
-      <div class="text-sm mb-4" style="color: var(--cyber-purple);">// system stats</div>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-        <div>
-          <div class="text-2xl font-bold glow-green" id="doc-count">-</div>
-          <div class="text-sm opacity-60">documents</div>
-        </div>
-        <div>
-          <div class="text-2xl font-bold glow-cyan" id="interview-count">-</div>
-          <div class="text-sm opacity-60">interview Qs</div>
-        </div>
-        <div>
-          <div class="text-2xl font-bold glow-purple" style="color: var(--cyber-purple);">∞</div>
-          <div class="text-sm opacity-60">possibilities</div>
-        </div>
-        <div>
-          <div class="text-2xl font-bold" style="color: var(--cyber-yellow);">100%</div>
-          <div class="text-sm opacity-60">awesome</div>
-        </div>
+  <!-- Feature Cards -->
+  <div class="features fade-in" style="animation-delay: 0.1s;">
+    <a href="/knowledge" class="feature-card">
+      <div class="feature-icon">📚</div>
+      <div class="feature-title">知识库</div>
+      <div class="feature-desc">
+        浏览我的知识沉淀，涵盖 Java、AI、架构设计等多个领域
+      </div>
+      <span class="feature-arrow">→</span>
+    </a>
+
+    <a href="/interview" class="feature-card">
+      <div class="feature-icon">🎯</div>
+      <div class="feature-title">面试题练习</div>
+      <div class="feature-desc">
+        闯关答题，AI 智能提示，帮你准备面试挑战
+      </div>
+      <span class="feature-arrow">→</span>
+    </a>
+
+    <a href="/chat" class="feature-card">
+      <div class="feature-icon">🤖</div>
+      <div class="feature-title">AI 助手</div>
+      <div class="feature-desc">
+        与 AI 对话，解答知识库相关问题，聊天中学习
+      </div>
+      <span class="feature-arrow">→</span>
+    </a>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-card fade-in" style="animation-delay: 0.2s;">
+    <div class="stats-grid">
+      <div class="stat-item">
+        <div class="stat-value" id="doc-count">-</div>
+        <div class="stat-label">知识文档</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="interview-count">-</div>
+        <div class="stat-label">面试题目</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" style="color: var(--apple-success);">∞</div>
+        <div class="stat-label">学习可能</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" style="color: var(--apple-warning);">100%</div>
+        <div class="stat-label">全力以赴</div>
       </div>
     </div>
+  </div>
 
-    <!-- ASCII Art -->
-    <div class="mt-8 text-center opacity-30 text-xs leading-tight" style="font-family: monospace;">
-{`
- ██████╗██╗  ██╗ █████╗ ██████╗  ██████╗ ██╗    ██╗███╗   ██╗
-██╔════╝██║  ██║██╔══██╗██╔══██╗██╔═══██╗██║    ██║████╗  ██║
-███████╗███████║███████║██║  ██║██║   ██║██║ █╗ ██║██╔██╗ ██║
-╚════██║██╔══██║██╔══██║██║  ██║██║   ██║██║███╗██║██║╚██╗██║
-██████╔╝██║  ██║██║  ██║██████╔╝╚██████╔╝╚███╔███╔╝██║ ╚████║
-╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝  ╚═════╝  ╚══╝╚══╝ ╚═╝  ╚══╝
-`}
+  <!-- Quick Actions -->
+  <div class="stats-card fade-in" style="animation-delay: 0.3s; margin-top: 24px;">
+    <div style="padding: 20px 24px;">
+      <div style="font-size: 14px; color: var(--text-secondary); margin-bottom: 16px; font-weight: 500;">
+        快捷访问
+      </div>
+      <div class="quick-actions">
+        <a href="/knowledge/AI学习/Agent工程师/1-2026年我决定跟AI死磕" class="quick-action">
+          🚀 AI 学习笔记
+        </a>
+        <a href="/interview/java/jvm-interview" class="quick-action">
+          ☕ Java JVM 面试题
+        </a>
+        <a href="/interview/ai/llm-interview" class="quick-action">
+          🤖 LLM 面试题
+        </a>
+        <a href="/chat" class="quick-action">
+          💬 AI 对话
+        </a>
+      </div>
     </div>
   </div>
 </Layout>
 
 <script>
-  // Typewriter effect
-  const lines = [
-    '$ ./welcome.sh',
-    '',
-    '> Initializing TerminalMind...',
-    '> Loading knowledge base... [OK]',
-    '> Loading interview questions... [OK]',
-    '> Starting AI assistant... [OK]',
-    '',
-    '╔══════════════════════════════════════════════════════╗',
-    '║                                                      ║',
-    '║   WELCOME TO TERMINALMIND                           ║',
-    '║   ─────────────────────                              ║',
-    '║   Your personal knowledge base & interview trainer   ║',
-    '║                                                      ║',
-    '║   Type "help" for available commands                ║',
-    '║   Or click the navigation links above               ║',
-    '║                                                      ║',
-    '╚══════════════════════════════════════════════════════╝',
-    '',
-    '$ █'
-  ];
-
-  let lineIndex = 0;
-  let charIndex = 0;
-  const typedContent = document.getElementById('typed-content');
-  
-  function typeWriter() {
-    if (!typedContent) return;
-    
-    if (lineIndex < lines.length) {
-      const currentLine = lines[lineIndex];
-      
-      if (charIndex < currentLine.length) {
-        // Add character with appropriate color
-        const span = document.createElement('span');
-        
-        if (currentLine.startsWith('$')) {
-          span.style.color = 'var(--cyber-green)';
-        } else if (currentLine.startsWith('>')) {
-          span.style.color = 'var(--cyber-cyan)';
-        } else if (currentLine.startsWith('╔') || currentLine.startsWith('║') || currentLine.startsWith('╚')) {
-          span.style.color = 'var(--cyber-purple)';
-        } else if (currentLine === '') {
-          span.innerHTML = '<br>';
-        }
-        
-        if (currentLine === '$ █') {
-          // Blinking cursor at the end
-          span.innerHTML = '$ <span class="cursor" style="color: var(--cyber-green);">█</span>';
-          typedContent.appendChild(span);
-        } else {
-          span.textContent = currentLine[charIndex];
-          typedContent.appendChild(span);
-        }
-        
-        charIndex++;
-        setTimeout(typeWriter, 15);
-      } else {
-        // End of line
-        if (currentLine !== '$ █') {
-          const br = document.createElement('br');
-          typedContent.appendChild(br);
-        }
-        lineIndex++;
-        charIndex = 0;
-        setTimeout(typeWriter, 100);
-      }
-    }
-  }
-
-  // Start typewriter after a short delay
-  setTimeout(typeWriter, 500);
-
-  // Fetch stats
   async function loadStats() {
     try {
       const res = await fetch('/api/stats');
@@ -171,7 +105,7 @@ import Layout from '../layouts/Layout.astro';
       if (docCount) docCount.textContent = data.knowledgeCount?.toString() || '0';
       if (interviewCount) interviewCount.textContent = data.interviewCount?.toString() || '0';
     } catch (e) {
-      // Silently fail, keep dashes
+      // Silently fail
     }
   }
   
