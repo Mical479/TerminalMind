@@ -3,336 +3,463 @@ import Layout from '../../layouts/Layout.astro';
 import fs from 'fs';
 import path from 'path';
 
-export async function getStaticPaths() {
-  const configPath = '/home/ubuntu/my_knowledge';
-  const interviewPath = path.join(process.cwd(), 'public', 'content', 'interview');
-  const contentPath = fs.existsSync(interviewPath) ? interviewPath : path.join(process.cwd(), 'public/content/interview');
-  
-  const paths: { params: { slug: string }; props: { title: string; questions: any[]; breadcrumb: string } }[] = [];
+interface InterviewConfig {
+  basePath: string;
+  title: string;
+}
 
-  function walk(dir: string, baseSlug: string = '') {
-    if (!fs.existsSync(dir)) return;
+const defaultConfig: InterviewConfig = {
+  basePath: '/home/ubuntu/my_knowledge/面试题库',
+  title: '面试题'
+};
 
-    const items = fs.readdirSync(dir, { withFileTypes: true });
+function getConfig(): InterviewConfig {
+  try {
+    const configPath = path.join(process.cwd(), 'config', 'site.config.json');
+    if (fs.existsSync(configPath)) {
+      const configData = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      return { ...defaultConfig, ...configData.interview };
+    }
+  } catch (e) {
+    console.error('Failed to load config:', e);
+  }
+  return defaultConfig;
+}
 
-    for (const item of items) {
-      const fullPath = path.join(dir, item.name);
-      const ext = path.extname(item.name).toLowerCase();
+function parseFrontmatter(content: string): { metadata: Record<string, any>; body: string } {
+  const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  if (!match) return { metadata: {}, body: content };
 
-      if (item.isDirectory()) {
-        walk(fullPath, baseSlug ? `${baseSlug}/${item.name}` : item.name);
-      } else if (ext === '.md' || ext === '.mdx') {
-        const slug = item.name.replace(/\.mdx?$/, '');
-        const fullSlug = baseSlug ? `${baseSlug}/${slug}` : slug;
-        const content = fs.readFileSync(fullPath, 'utf-8');
-        const titleMatch = content.match(/^#\s+(.+)$/m);
-        const title = titleMatch ? titleMatch[1].trim() : slug;
+  const yamlStr = match[1];
+  const body = match[2];
+  const metadata: Record<string, any> = {};
 
-        const questions: any[] = [];
-        const questionBlocks = content.split(/^##\s+/m).slice(1);
-        
-        for (const block of questionBlocks) {
-          const lines = block.trim().split('\n');
-          const qTitle = lines[0];
-          const rest = lines.slice(1).join('\n');
-          
-          const optionMatches = [...rest.matchAll(/^- ([A-Z])\)\s*(.+)$/gm)];
-          const options: any[] = [];
-          let correctAnswer: string | null = null;
-          
-          for (const match of optionMatches) {
-            const letter = match[1];
-            const text = match[2].replace(/\*\*([^*]+)\*\*/g, '$1').replace('[x]', '').trim();
-            options.push({ letter, text });
-            
-            const originalText = match[2];
-            if (originalText.includes('[x]') || originalText.toLowerCase().includes(`correct: ${letter.toLowerCase()}`)) {
-              correctAnswer = letter;
-            }
-          }
-          
-          const answerMatch = rest.match(/\*\*Answer:\*\*\s*([A-Z])/i) || rest.match(/Answer:\s*([A-Z])/i);
-          if (answerMatch && !correctAnswer) {
-            correctAnswer = answerMatch[1].toUpperCase();
-          }
-          
-          if (options.length > 0) {
-            questions.push({
-              question: qTitle,
-              options,
-              answer: correctAnswer
-            });
-          }
-        }
-
-        paths.push({
-          params: { slug: fullSlug },
-          props: { 
-            title: title.replace(/\[.*?\]$/, '').trim(),
-            questions,
-            breadcrumb: baseSlug ? baseSlug.split('/').join(' > ') : 'root'
-          }
-        });
+  yamlStr.split('\n').forEach(line => {
+    const [key, ...valueParts] = line.split(':');
+    if (key && valueParts.length > 0) {
+      const value = valueParts.join(':').trim();
+      
+      if (value.startsWith('[') && value.endsWith(']')) {
+        metadata[key.trim()] = value.slice(1, -1).split(',').map(s => s.trim());
+      } else {
+        metadata[key.trim()] = value.replace(/^["']|["']$/g, '');
       }
+    }
+  });
+
+  return { metadata, body };
+}
+
+interface Question {
+  number: number;
+  question: string;
+  options: { letter: string; text: string; isAnswer: boolean }[];
+  explanation?: string;
+}
+
+function parseQuestions(body: string): Question[] {
+  const questions: Question[] = [];
+  const blocks = body.split(/^##\s+\d+[\.:]?\s*/m).filter(b => b.trim());
+  
+  blocks.forEach((block, index) => {
+    const lines = block.trim().split('\n');
+    const questionText = lines[0].replace(/\*\*/g, '').trim();
+    const rest = lines.slice(1).join('\n');
+    
+    // Parse options
+    const optionMatches = rest.matchAll(/^- ([A-Z])\)\s*(.+)$/gm);
+    const options: Question['options'] = [];
+    let explanation: string | undefined;
+    
+    for (const match of optionMatches) {
+      const letter = match[1];
+      let text = match[2].trim();
+      
+      // Check if this is the answer
+      const isAnswer = text.includes('**[答案]**') || text.includes('[答案]');
+      text = text.replace(/\*\*\[答案\]\*\*/g, '').replace('[答案]', '').trim();
+      
+      options.push({ letter, text, isAnswer });
+    }
+    
+    // Parse explanation
+    const explainMatch = rest.match(/\*\*解析：**\s*([\s\S]*?)(?:---|$)/);
+    if (explainMatch) {
+      explanation = explainMatch[1].trim();
+    }
+    
+    if (options.length > 0) {
+      questions.push({
+        number: index + 1,
+        question: questionText,
+        options,
+        explanation
+      });
+    }
+  });
+  
+  return questions;
+}
+
+export async function getStaticPaths() {
+  const config = getConfig();
+  const basePath = config.basePath;
+  
+  const paths: { params: { slug: string }; props: { title: string; metadata: Record<string, any>; questions: Question[] } }[] = [];
+
+  if (!fs.existsSync(basePath)) return paths;
+
+  const items = fs.readdirSync(basePath, { withFileTypes: true });
+
+  for (const item of items) {
+    const fullPath = path.join(basePath, item.name);
+    
+    if (item.isDirectory()) continue;
+    
+    const ext = path.extname(item.name).toLowerCase();
+    if (ext === '.md' || ext === '.mdx') {
+      const slug = item.name.replace(/\.mdx?$/, '');
+      const content = fs.readFileSync(fullPath, 'utf-8');
+      const { metadata, body } = parseFrontmatter(content);
+      const questions = parseQuestions(body);
+
+      paths.push({
+        params: { slug },
+        props: { 
+          title: metadata.title || slug,
+          metadata,
+          questions
+        }
+      });
     }
   }
 
-  walk(contentPath);
   return paths;
 }
 
-const { title, questions, breadcrumb } = Astro.props;
-const totalQuestions = questions.length;
+const { title, metadata, questions } = Astro.props;
+
+const difficultyConfig: Record<string, { color: string; bg: string; label: string }> = {
+  Easy: { color: '#34C759', bg: 'rgba(52, 199, 89, 0.1)', label: '🟢 简单' },
+  Medium: { color: '#FF9500', bg: 'rgba(255, 149, 0, 0.1)', label: '🟡 中等' },
+  Hard: { color: '#FF3B30', bg: 'rgba(255, 59, 48, 0.1)', label: '🔴 困难' }
+};
+
+const diff = difficultyConfig[metadata.difficulty || 'Medium'] || difficultyConfig.Medium;
 ---
 
 <Layout title={title}>
-  <div style="max-width: 800px; margin: 0 auto; padding-bottom: 40px;">
-    <!-- Back & Title -->
+  <div style="max-width: 900px; margin: 0 auto; padding-bottom: 60px;">
+    <!-- Back & Header -->
     <div style="margin-bottom: 24px;">
       <a href="/interview" style="color: var(--apple-blue); text-decoration: none; font-size: 14px; display: inline-flex; align-items: center; gap: 4px;">
         ← 返回面试题
       </a>
     </div>
 
-    <!-- Quiz Card -->
-    <div class="content-card">
-      <div style="padding: 24px; border-bottom: 1px solid var(--apple-border);">
-        <h1 style="font-size: 24px; font-weight: 700; margin-bottom: 8px;">{title}</h1>
-        <div style="display: flex; align-items: center; gap: 16px; color: var(--text-secondary); font-size: 14px;">
-          <span>{totalQuestions} 道题目</span>
-          <span>|</span>
-          <span id="score-display">得分: 0</span>
-        </div>
-      </div>
-
-      <!-- Progress -->
-      <div style="padding: 16px 24px; border-bottom: 1px solid var(--apple-border);">
-        <div style="display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary); margin-bottom: 8px;">
-          <span>进度</span>
-          <span id="progress-text">1 / {totalQuestions}</span>
-        </div>
-        <div style="background: var(--bg-secondary); height: 6px; border-radius: 3px; overflow: hidden;">
-          <div id="progress-bar" style="background: var(--apple-blue); height: 100%; width: 0%; transition: width 0.3s ease;"></div>
-        </div>
-      </div>
-
-      <!-- Questions Container -->
-      <div id="quiz-container" style="padding: 24px;">
-        {questions.map((q: any, index: number) => (
-          <div 
-            class="quiz-question-container"
-            data-index={index}
-            data-answer={q.answer}
-            style={index === 0 ? '' : 'display: none;'}
+    <!-- Title Card -->
+    <div class="content-card" style="margin-bottom: 24px;">
+      <div style="padding: 24px;">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;">
+          <span 
+            class="difficulty-badge"
+            style={`color: ${diff.color}; background: ${diff.bg}; padding: 4px 12px; border-radius: 12px; font-size: 13px; font-weight: 600;`}
           >
-            <div style="font-size: 16px; font-weight: 500; margin-bottom: 16px; color: var(--text-primary);">
-              <span style="color: var(--apple-blue); font-weight: 600;">Q{index + 1}</span>
-              <span style="margin-left: 8px;">{q.question}</span>
-            </div>
-            
-            <div class="quiz-options">
-              {q.options.map((opt: any) => (
-                <div 
-                  class="quiz-option" 
-                  data-letter={opt.letter}
-                >
-                  <span style="font-weight: 500; margin-right: 8px; color: var(--apple-blue);">{opt.letter}</span>
-                  {opt.text}
-                </div>
-              ))}
-            </div>
-
-            <!-- AI Hint -->
-            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--apple-border);">
-              <button 
-                class="ai-hint-btn"
-                data-question={q.question}
-                style="background: var(--bg-secondary); border: 1px solid var(--apple-border); padding: 8px 16px; border-radius: var(--radius-sm); font-size: 14px; cursor: pointer; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 6px;"
-              >
-                🤖  AI 提示
-              </button>
-              <div class="ai-hint-result" style="margin-top: 12px; padding: 12px; background: var(--bg-secondary); border-radius: var(--radius-sm); font-size: 14px; display: none;"></div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <!-- Navigation -->
-      <div id="quiz-nav" style="padding: 20px 24px; border-top: 1px solid var(--apple-border); display: flex; justify-content: space-between;">
-        <button id="prev-btn" class="btn btn-secondary" disabled style="opacity: 0.5;">
-          ← 上一题
-        </button>
-        <button id="next-btn" class="btn btn-primary" disabled style="opacity: 0.5;">
-          下一题 →
-        </button>
-      </div>
-
-      <!-- Complete Screen -->
-      <div id="complete-screen" style="padding: 48px; text-align: center; display: none;">
-        <div style="font-size: 64px; margin-bottom: 16px;">🎉</div>
-        <h2 style="font-size: 24px; font-weight: 700; margin-bottom: 8px;">练习完成！</h2>
-        <p style="font-size: 18px; color: var(--text-secondary); margin-bottom: 24px;">
-          你的得分: <span id="final-score" style="font-weight: 700; color: var(--apple-blue);">0</span> / {totalQuestions}
-        </p>
-        <div style="display: flex; gap: 12px; justify-content: center;">
-          <a href="/interview" class="btn btn-secondary">返回列表</a>
-          <button id="retry-btn" class="btn btn-primary">再试一次</button>
+            {diff.label}
+          </span>
+          <span style="color: var(--text-secondary); font-size: 13px;">{questions.length} 道题</span>
+          {metadata.date && (
+            <span style="color: var(--text-secondary); font-size: 13px;">{metadata.date}</span>
+          )}
         </div>
+        <h1 style="font-size: 24px; font-weight: 700; margin-bottom: 12px;">{title}</h1>
+        {metadata.tags && metadata.tags.length > 0 && (
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            {metadata.tags.map((tag: string) => (
+              <span style="background: var(--bg-secondary); color: var(--text-secondary); padding: 4px 10px; border-radius: 8px; font-size: 12px;">
+                #{tag}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+
+    <!-- Questions -->
+    <div class="questions-container">
+      {questions.map((q, index) => (
+        <div class="question-card" data-index={index}>
+          <div class="question-header">
+            <span class="question-number">{q.number}</span>
+            <span class="question-text">{q.question}</span>
+          </div>
+          
+          <div class="options-container">
+            {q.options.map(opt => (
+              <div class="option-item" data-letter={opt.letter}>
+                <span class="option-letter">{opt.letter}</span>
+                <span class="option-text">{opt.text}</span>
+              </div>
+            ))}
+          </div>
+          
+          <div class="answer-section" style="display: none;">
+            <div class="answer-reveal">
+              <span class="reveal-label">正确答案：</span>
+              <span class="reveal-answer">{q.options.find(o => o.isAnswer)?.letter}</span>
+            </div>
+            {q.explanation && (
+              <div class="explanation">
+                <span class="explanation-label">💡 解析：</span>
+                <span class="explanation-text">{q.explanation}</span>
+              </div>
+            )}
+          </div>
+          
+          <div class="question-footer">
+            <button class="check-answer-btn" onclick={`toggleAnswer(${index})`}>
+              查看答案 & 解析
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <!-- AI Hint -->
+    <div class="content-card" style="margin-top: 24px;">
+      <div style="padding: 20px; text-align: center;">
+        <p style="color: var(--text-secondary); margin-bottom: 12px;">需要 AI 帮你解答疑问？</p>
+        <a href="/chat" class="btn btn-primary">
+          🤖 询问 AI 助手
+        </a>
       </div>
     </div>
   </div>
 </Layout>
 
+<style>
+  .questions-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .question-card {
+    background: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--apple-border);
+    overflow: hidden;
+    transition: all 0.25s ease;
+  }
+
+  .question-card:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  .question-header {
+    display: flex;
+    gap: 12px;
+    padding: 20px;
+    background: var(--bg-tertiary);
+    border-bottom: 1px solid var(--apple-border);
+  }
+
+  .question-number {
+    width: 32px;
+    height: 32px;
+    background: var(--apple-blue);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .question-text {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text-primary);
+    line-height: 1.5;
+  }
+
+  .options-container {
+    padding: 16px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .option-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .option-item:hover {
+    border-color: var(--apple-blue);
+    background: rgba(0, 122, 255, 0.04);
+  }
+
+  .option-item.correct {
+    border-color: var(--apple-success);
+    background: rgba(52, 199, 89, 0.08);
+  }
+
+  .option-item.incorrect {
+    border-color: var(--apple-error);
+    background: rgba(255, 59, 48, 0.08);
+  }
+
+  .option-letter {
+    width: 26px;
+    height: 26px;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--apple-blue);
+    flex-shrink: 0;
+  }
+
+  .option-item.correct .option-letter {
+    background: var(--apple-success);
+    color: white;
+  }
+
+  .option-item.incorrect .option-letter {
+    background: var(--apple-error);
+    color: white;
+  }
+
+  .option-text {
+    font-size: 15px;
+    color: var(--text-primary);
+    line-height: 1.5;
+  }
+
+  .answer-section {
+    padding: 16px 20px;
+    background: rgba(0, 122, 255, 0.04);
+    border-top: 1px solid rgba(0, 122, 255, 0.1);
+  }
+
+  .answer-reveal {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .reveal-label {
+    font-size: 14px;
+    color: var(--text-secondary);
+  }
+
+  .reveal-answer {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--apple-success);
+  }
+
+  .explanation {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+
+  .explanation-label {
+    font-weight: 500;
+  }
+
+  .question-footer {
+    padding: 16px 20px;
+    border-top: 1px solid var(--apple-border);
+    display: flex;
+    justify-content: center;
+  }
+
+  .check-answer-btn {
+    background: var(--bg-secondary);
+    border: 1px solid var(--apple-border);
+    padding: 10px 20px;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    color: var(--apple-blue);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: 500;
+  }
+
+  .check-answer-btn:hover {
+    background: var(--apple-blue);
+    color: white;
+    border-color: var(--apple-blue);
+  }
+
+  @media (max-width: 768px) {
+    .question-header {
+      padding: 16px;
+    }
+    
+    .question-text {
+      font-size: 15px;
+    }
+    
+    .options-container {
+      padding: 12px 16px;
+    }
+    
+    .option-item {
+      padding: 12px;
+    }
+  }
+</style>
+
 <script>
-  interface QuizState {
-    currentIndex: number;
-    score: number;
-    answered: Set<number>;
-  }
-
-  const state: QuizState = {
-    currentIndex: 0,
-    score: 0,
-    answered: new Set()
-  };
-
-  const questions = document.querySelectorAll('.quiz-question-container');
-  const totalQuestions = questions.length;
-  const progressBar = document.getElementById('progress-bar')!;
-  const progressText = document.getElementById('progress-text')!;
-  const scoreDisplay = document.getElementById('score-display')!;
-  const prevBtn = document.getElementById('prev-btn') as HTMLButtonElement;
-  const nextBtn = document.getElementById('next-btn') as HTMLButtonElement;
-  const completeScreen = document.getElementById('complete-screen')!;
-  const quizNav = document.getElementById('quiz-nav')!;
-  const finalScore = document.getElementById('final-score')!;
-  const retryBtn = document.getElementById('retry-btn')!;
-
-  function showQuestion(index: number) {
-    questions.forEach((q, i) => {
-      (q as HTMLElement).style.display = i === index ? 'block' : 'none';
-    });
+  function toggleAnswer(index: number) {
+    const card = document.querySelector(`[data-index="${index}"]`) as HTMLElement;
+    const answerSection = card.querySelector('.answer-section') as HTMLElement;
+    const btn = card.querySelector('.check-answer-btn') as HTMLButtonElement;
     
-    progressText.textContent = `${index + 1} / ${totalQuestions}`;
-    progressBar.style.width = `${((index + 1) / totalQuestions) * 100}%`;
-    
-    prevBtn.disabled = index === 0;
-    prevBtn.style.opacity = index === 0 ? '0.5' : '1';
-    
-    const currentQ = questions[index] as HTMLElement;
-    const isAnswered = state.answered.has(index);
-    nextBtn.disabled = !isAnswered;
-    nextBtn.style.opacity = isAnswered ? '1' : '0.5';
-    
-    nextBtn.textContent = index === totalQuestions - 1 ? '查看结果 →' : '下一题 →';
-  }
-
-  function selectAnswer(questionIndex: number, letter: string) {
-    if (state.answered.has(questionIndex)) return;
-    
-    const question = questions[questionIndex] as HTMLElement;
-    const answer = question.dataset.answer!;
-    const options = question.querySelectorAll('.quiz-option');
-    
-    state.answered.add(questionIndex);
-    
-    options.forEach(opt => {
-      const optLetter = opt.getAttribute('data-letter')!;
-      if (optLetter === answer) {
-        opt.classList.add('correct');
-      } else if (optLetter === letter && letter !== answer) {
-        opt.classList.add('incorrect');
-      }
-    });
-    
-    if (letter === answer) {
-      state.score++;
-      scoreDisplay.textContent = `得分: ${state.score}`;
-    }
-    
-    nextBtn.disabled = false;
-    nextBtn.style.opacity = '1';
-  }
-
-  function nextQuestion() {
-    if (state.currentIndex < totalQuestions - 1) {
-      state.currentIndex++;
-      showQuestion(state.currentIndex);
+    if (answerSection.style.display === 'none') {
+      answerSection.style.display = 'block';
+      btn.textContent = '收起答案';
+      
+      // Auto reveal correct/incorrect
+      const options = card.querySelectorAll('.option-item');
+      const correctLetter = card.querySelector('.reveal-answer')?.textContent;
+      
+      options.forEach(opt => {
+        const letter = opt.getAttribute('data-letter');
+        if (letter === correctLetter) {
+          opt.classList.add('correct');
+        }
+      });
     } else {
-      showComplete();
-    }
-  }
-
-  function prevQuestion() {
-    if (state.currentIndex > 0) {
-      state.currentIndex--;
-      showQuestion(state.currentIndex);
-    }
-  }
-
-  function showComplete() {
-    quizNav.style.display = 'none';
-    completeScreen.style.display = 'block';
-    finalScore.textContent = String(state.score);
-  }
-
-  function resetQuiz() {
-    state.currentIndex = 0;
-    state.score = 0;
-    state.answered.clear();
-    
-    scoreDisplay.textContent = '得分: 0';
-    quizNav.style.display = 'flex';
-    completeScreen.style.display = 'none';
-    
-    questions.forEach(q => {
-      const options = q.querySelectorAll('.quiz-option');
+      answerSection.style.display = 'none';
+      btn.textContent = '查看答案 & 解析';
+      
+      // Reset styles
+      const options = card.querySelectorAll('.option-item');
       options.forEach(opt => {
         opt.classList.remove('correct', 'incorrect');
       });
-      const hintResult = q.querySelector('.ai-hint-result') as HTMLElement;
-      if (hintResult) hintResult.style.display = 'none';
-    });
-    
-    showQuestion(0);
+    }
   }
 
-  questions.forEach((q, index) => {
-    const options = q.querySelectorAll('.quiz-option');
-    options.forEach(opt => {
-      opt.addEventListener('click', () => {
-        selectAnswer(index, opt.getAttribute('data-letter')!);
-      });
-    });
-  });
-
-  nextBtn.addEventListener('click', nextQuestion);
-  prevBtn.addEventListener('click', prevQuestion);
-  retryBtn.addEventListener('click', resetQuiz);
-
-  // AI Hint
-  document.querySelectorAll('.ai-hint-btn').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-      const button = e.target as HTMLButtonElement;
-      const question = button.dataset.question!;
-      const hintResult = button.nextElementSibling as HTMLElement;
-      
-      hintResult.style.display = 'block';
-      hintResult.textContent = '🤖 思考中...';
-      
-      try {
-        const res = await fetch('/api/ai-hint', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question })
-        });
-        const data = await res.json();
-        hintResult.textContent = `💡 ${data.hint}`;
-      } catch {
-        hintResult.textContent = '❌ 获取提示失败';
-      }
-    });
-  });
-
-  showQuestion(0);
+  // Make toggleAnswer available globally
+  (window as any).toggleAnswer = toggleAnswer;
 </script>

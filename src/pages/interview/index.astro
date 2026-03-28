@@ -3,89 +3,141 @@ import Layout from '../../layouts/Layout.astro';
 import fs from 'fs';
 import path from 'path';
 
+interface InterviewConfig {
+  basePath: string;
+  title: string;
+}
+
+const defaultConfig: InterviewConfig = {
+  basePath: '/home/ubuntu/my_knowledge/面试题库',
+  title: '面试题'
+};
+
+function getConfig(): InterviewConfig {
+  try {
+    const configPath = path.join(process.cwd(), 'config', 'site.config.json');
+    if (fs.existsSync(configPath)) {
+      const configData = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      return { ...defaultConfig, ...configData.interview };
+    }
+  } catch (e) {
+    console.error('Failed to load config:', e);
+  }
+  return defaultConfig;
+}
+
 interface InterviewEntry {
   title: string;
   slug: string;
-  category: string;
-  difficulty?: string;
-  questions: number;
   path: string;
+  date?: string;
+  category?: string;
+  difficulty?: string;
+  tags?: string[];
+  questionCount: number;
 }
 
-function getAllInterviews(baseDir: string): InterviewEntry[] {
-  const interviews: InterviewEntry[] = [];
-  
-  if (!fs.existsSync(baseDir)) return interviews;
-  
-  function walk(dir: string, category: string = 'root') {
-    const items = fs.readdirSync(dir, { withFileTypes: true });
-    
-    for (const item of items) {
-      const fullPath = path.join(dir, item.name);
+function parseFrontmatter(content: string): { metadata: Record<string, any>; body: string } {
+  const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  if (!match) return { metadata: {}, body: content };
+
+  const yamlStr = match[1];
+  const body = match[2];
+  const metadata: Record<string, any> = {};
+
+  yamlStr.split('\n').forEach(line => {
+    const [key, ...valueParts] = line.split(':');
+    if (key && valueParts.length > 0) {
+      const value = valueParts.join(':').trim();
       
-      if (item.isDirectory()) {
-        walk(fullPath, item.name);
+      if (value.startsWith('[') && value.endsWith(']')) {
+        metadata[key.trim()] = value.slice(1, -1).split(',').map(s => s.trim());
       } else {
-        const ext = path.extname(item.name).toLowerCase();
-        if (ext === '.md' || ext === '.mdx') {
-          const slug = item.name.replace(/\.mdx?$/, '');
-          const content = fs.readFileSync(fullPath, 'utf-8');
-          const titleMatch = content.match(/^#\s+(.+)$/m);
-          const title = titleMatch ? titleMatch[1].trim() : slug;
-          
-          const questionMatches = content.match(/^#{2,3}\s+/gm);
-          const questions = questionMatches ? questionMatches.length : 0;
-          
-          let difficulty: string | undefined;
-          const diffMatch = title.match(/\[(.*?)\]$/);
-          if (diffMatch) {
-            difficulty = diffMatch[1];
-          }
-          
-          interviews.push({
-            title: title.replace(/\[.*?\]$/, '').trim(),
-            slug,
-            category,
-            difficulty,
-            questions,
-            path: fullPath.replace(process.cwd() + '/public/content/', '')
-          });
-        }
+        metadata[key.trim()] = value.replace(/^["']|["']$/g, '');
       }
+    }
+  });
+
+  return { metadata, body };
+}
+
+function getAllInterviews(config: InterviewConfig): InterviewEntry[] {
+  const interviews: InterviewEntry[] = [];
+  const basePath = config.basePath;
+  
+  if (!fs.existsSync(basePath)) return interviews;
+  
+  const items = fs.readdirSync(basePath, { withFileTypes: true });
+  
+  for (const item of items) {
+    const fullPath = path.join(basePath, item.name);
+    
+    if (item.isDirectory()) {
+      // Skip directories for now
+      continue;
+    }
+    
+    const ext = path.extname(item.name).toLowerCase();
+    if (ext === '.md' || ext === '.mdx') {
+      const slug = item.name.replace(/\.mdx?$/, '');
+      const content = fs.readFileSync(fullPath, 'utf-8');
+      const { metadata, body } = parseFrontmatter(content);
+      
+      // Count questions
+      const questionMatches = body.match(/^##\s+\d+/gm);
+      const questionCount = questionMatches ? questionMatches.length : 0;
+      
+      interviews.push({
+        title: metadata.title || slug,
+        slug,
+        path: fullPath.replace(process.cwd() + '/', ''),
+        date: metadata.date,
+        category: metadata.category,
+        difficulty: metadata.difficulty,
+        tags: metadata.tags || [],
+        questionCount
+      });
     }
   }
   
-  walk(baseDir);
+  // Sort by date descending
+  interviews.sort((a, b) => {
+    if (a.date && b.date) {
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    }
+    return 0;
+  });
+  
   return interviews;
 }
 
-const interviewPath = path.join(process.cwd(), 'public', 'content', 'interview');
-const interviews = getAllInterviews(interviewPath);
+const config = getConfig();
+const interviews = getAllInterviews(config);
+
+const difficultyConfig: Record<string, { color: string; bg: string; label: string }> = {
+  Easy: { color: '#34C759', bg: 'rgba(52, 199, 89, 0.1)', label: '🟢 简单' },
+  Medium: { color: '#FF9500', bg: 'rgba(255, 149, 0, 0.1)', label: '🟡 中等' },
+  Hard: { color: '#FF3B30', bg: 'rgba(255, 59, 48, 0.1)', label: '🔴 困难' }
+};
 
 const grouped = interviews.reduce((acc, interview) => {
-  const cat = interview.category || 'uncategorized';
+  const cat = interview.category || '其他';
   if (!acc[cat]) acc[cat] = [];
   acc[cat].push(interview);
   return acc;
 }, {} as Record<string, InterviewEntry[]>);
 
 const categories = Object.keys(grouped).sort();
-
-const difficultyColors: Record<string, string> = {
-  'easy': 'var(--apple-success)',
-  'medium': 'var(--apple-warning)',
-  'hard': 'var(--apple-error)'
-};
 ---
 
-<Layout title="面试题">
+<Layout title={config.title || '面试题'}>
   <!-- Hero -->
   <div class="hero-card" style="text-align: left; padding: 32px;">
     <div style="display: flex; align-items: center; gap: 16px; margin-bottom: 16px;">
       <span style="font-size: 32px;">🎯</span>
       <div>
-        <h1 style="font-size: 28px; font-weight: 700; margin-bottom: 4px;">面试题练习</h1>
-        <p style="color: var(--text-secondary); font-size: 15px;">共 {interviews.length} 个话题，{interviews.reduce((sum, i) => sum + i.questions, 0)} 道题目</p>
+        <h1 style="font-size: 28px; font-weight: 700; margin-bottom: 4px;">{config.title || '面试题'}</h1>
+        <p style="color: var(--text-secondary); font-size: 15px;">共 {interviews.length} 个话题 · {interviews.reduce((sum, i) => sum + i.questionCount, 0)} 道题目</p>
       </div>
     </div>
     
@@ -93,58 +145,81 @@ const difficultyColors: Record<string, string> = {
     <div style="display: flex; gap: 16px; font-size: 13px;">
       <span style="display: flex; align-items: center; gap: 6px;">
         <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--apple-success);"></span>
-        Easy
+        简单
       </span>
       <span style="display: flex; align-items: center; gap: 6px;">
         <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--apple-warning);"></span>
-        Medium
+        中等
       </span>
       <span style="display: flex; align-items: center; gap: 6px;">
         <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--apple-error);"></span>
-        Hard
+        困难
       </span>
     </div>
   </div>
 
-  <!-- Categories -->
-  {categories.map(category => (
-    <div class="content-card" style="margin-bottom: 20px;">
-      <div style="padding: 16px 20px; border-bottom: 1px solid var(--apple-border); display: flex; align-items: center; gap: 8px;">
-        <span style="font-size: 18px;">📋</span>
-        <span style="font-weight: 600; font-size: 15px;">{category}</span>
-        <span style="color: var(--text-secondary); font-size: 13px; margin-left: auto;">
-          {grouped[category].length} 个话题
-        </span>
+  <!-- Interview Cards - Horizontal Scroll -->
+  <div class="interview-section">
+    {categories.map(category => (
+      <div class="category-section">
+        <h2 class="category-title">
+          <span style="margin-right: 8px;">📋</span>
+          {category}
+        </h2>
+        <div class="cards-container">
+          {grouped[category].map(interview => {
+            const diff = difficultyConfig[interview.difficulty || 'Medium'] || difficultyConfig.Medium;
+            return (
+              <a href={`/interview/${interview.slug}`} class="interview-card">
+                <div class="card-header">
+                  <span 
+                    class="difficulty-badge"
+                    style={`color: ${diff.color}; background: ${diff.bg};`}
+                  >
+                    {diff.label}
+                  </span>
+                  {interview.date && (
+                    <span class="card-date">{interview.date}</span>
+                  )}
+                </div>
+                
+                <h3 class="card-title">{interview.title}</h3>
+                
+                <div class="card-meta">
+                  <span class="question-count">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                      <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                    {interview.questionCount} 道题
+                  </span>
+                </div>
+                
+                {interview.tags && interview.tags.length > 0 && (
+                  <div class="card-tags">
+                    {interview.tags.slice(0, 3).map(tag => (
+                      <span class="card-tag">#{tag}</span>
+                    ))}
+                  </div>
+                )}
+                
+                <div class="card-footer">
+                  <span class="start-btn">
+                    开始练习
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                      <polyline points="12 5 19 12 12 19"></polyline>
+                    </svg>
+                  </span>
+                </div>
+              </a>
+            );
+          })}
+        </div>
       </div>
-      <div style="padding: 12px;">
-        {grouped[category].map(interview => (
-          <a 
-            href={`/interview/${interview.slug}`}
-            class="quiz-card"
-            style="display: flex; align-items: center; justify-content: space-between; text-decoration: none; margin-bottom: 8px;"
-          >
-            <div style="display: flex; align-items: center; gap: 12px;">
-              <span style="font-size: 20px;">📝</span>
-              <div>
-                <div style="font-weight: 500; color: var(--text-primary);">{interview.title}</div>
-                <div style="font-size: 13px; color: var(--text-secondary);">{interview.questions} 道题</div>
-              </div>
-            </div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              {interview.difficulty && (
-                <span 
-                  style={`padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; background: ${difficultyColors[interview.difficulty.toLowerCase()] || 'gray'}15; color: ${difficultyColors[interview.difficulty.toLowerCase()] || 'gray'};`}
-                >
-                  {interview.difficulty}
-                </span>
-              )}
-              <span style="color: var(--apple-blue);">→</span>
-            </div>
-          </a>
-        ))}
-      </div>
-    </div>
-  ))}
+    ))}
+  </div>
 
   <!-- Empty state -->
   {interviews.length === 0 && (
@@ -152,8 +227,169 @@ const difficultyColors: Record<string, string> = {
       <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
       <p style="color: var(--text-secondary);">暂无面试题</p>
       <p style="color: var(--text-secondary); font-size: 14px; margin-top: 8px;">
-        将面试题 Markdown 文件添加到 interview 目录即可显示
+        在 {config.basePath} 目录下添加面试题文档
       </p>
     </div>
   )}
 </Layout>
+
+<style>
+  .interview-section {
+    display: flex;
+    flex-direction: column;
+    gap: 32px;
+  }
+
+  .category-section {
+    background: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    padding: 24px;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .category-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+  }
+
+  .cards-container {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding-bottom: 12px;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .cards-container::-webkit-scrollbar {
+    height: 6px;
+  }
+
+  .cards-container::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+    border-radius: 3px;
+  }
+
+  .cards-container::-webkit-scrollbar-thumb {
+    background: var(--apple-border);
+    border-radius: 3px;
+  }
+
+  .cards-container::-webkit-scrollbar-thumb:hover {
+    background: var(--apple-gray);
+  }
+
+  .interview-card {
+    flex: 0 0 280px;
+    background: var(--bg-tertiary);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    text-decoration: none;
+    color: inherit;
+    border: 1px solid var(--apple-border);
+    transition: all 0.25s ease;
+    scroll-snap-align: start;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .interview-card:hover {
+    border-color: var(--apple-blue);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+  }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .difficulty-badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .card-date {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  .card-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 12px;
+    line-height: 1.4;
+    flex: 1;
+  }
+
+  .card-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .question-count {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  .card-tags {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+
+  .card-tag {
+    font-size: 11px;
+    color: var(--apple-blue);
+    background: rgba(0, 122, 255, 0.08);
+    padding: 2px 8px;
+    border-radius: 6px;
+  }
+
+  .card-footer {
+    margin-top: auto;
+    padding-top: 12px;
+    border-top: 1px solid var(--apple-border);
+  }
+
+  .start-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    color: var(--apple-blue);
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  .interview-card:hover .start-btn {
+    gap: 10px;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .interview-card {
+      flex: 0 0 260px;
+    }
+    
+    .category-section {
+      padding: 16px;
+      border-radius: var(--radius-md);
+    }
+  }
+</style>

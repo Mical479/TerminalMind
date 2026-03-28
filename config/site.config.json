@@ -14,12 +14,13 @@
       ".obsidian",
       ".git",
       "Excalidraw",
-      "Prompt"
+      "Prompt",
+      "面试题库"
     ],
     "title": "知识库"
   },
   "interview": {
-    "basePath": "./content/interview",
+    "basePath": "/home/ubuntu/my_knowledge/面试题库",
     "title": "面试题"
   },
   "ai": {
