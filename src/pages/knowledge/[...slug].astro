@@ -10,7 +10,7 @@ export async function getStaticPaths() {
   
   const paths = [];
 
-  function walk(dir: string, baseSlug: string = '') {
+  function walk(dir: string, baseSlug: string = '', isRoot: boolean = true) {
     if (!fs.existsSync(dir)) return;
 
     const items = fs.readdirSync(dir, { withFileTypes: true });
@@ -20,12 +20,13 @@ export async function getStaticPaths() {
       
       if (excludeDirs.includes(item.name)) continue;
       
-      if (showDirs.length > 0 && !showDirs.includes(item.name) && item.isDirectory()) {
+      // Only apply showDirs filter at root level
+      if (isRoot && showDirs.length > 0 && !showDirs.includes(item.name) && item.isDirectory()) {
         continue;
       }
 
       if (item.isDirectory()) {
-        walk(fullPath, baseSlug ? `${baseSlug}/${item.name}` : item.name);
+        walk(fullPath, baseSlug ? `${baseSlug}/${item.name}` : item.name, false);
       } else {
         const lowerName = item.name.toLowerCase();
         if (lowerName === 'readme.md' || lowerName === 'index.md' || item.name.startsWith('CLAUDE')) continue;
