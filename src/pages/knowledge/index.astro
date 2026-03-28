@@ -93,8 +93,9 @@ function getAllDocs(config: KnowledgeConfig): DocEntry[] {
       // Skip excluded dirs
       if (config.excludeDirs.includes(item.name)) continue;
       
-      // Skip README files in display
-      if (item.name.toLowerCase() === 'readme.md') continue;
+      // Skip README and index files in display
+      const lowerName = item.name.toLowerCase();
+      if (lowerName === 'readme.md' || lowerName === 'index.md') continue;
       
       // If showDirs is set, only show those
       if (config.showDirs.length > 0 && !config.showDirs.includes(item.name) && item.isDirectory()) {
