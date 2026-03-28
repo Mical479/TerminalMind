@@ -15,9 +15,11 @@ interface DocEntry {
   slug: string;
   category: string;
   path: string;
+  date?: string;
+  tags?: string[];
+  excerpt?: string;
 }
 
-// 默认配置
 const defaultConfig: KnowledgeConfig = {
   basePath: '/home/ubuntu/my_knowledge',
   showDirs: [],
@@ -25,7 +27,6 @@ const defaultConfig: KnowledgeConfig = {
   title: '知识库'
 };
 
-// 读取配置
 function getConfig(): KnowledgeConfig {
   try {
     const configPath = path.join(process.cwd(), 'config', 'site.config.json');
@@ -37,6 +38,47 @@ function getConfig(): KnowledgeConfig {
     console.error('Failed to load config:', e);
   }
   return defaultConfig;
+}
+
+function parseFrontmatter(content: string): { metadata: Record<string, any>; body: string } {
+  const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  if (!match) return { metadata: {}, body: content };
+
+  const yamlStr = match[1];
+  const body = match[2];
+  const metadata: Record<string, any> = {};
+
+  // Simple YAML parser
+  yamlStr.split('\n').forEach(line => {
+    const [key, ...valueParts] = line.split(':');
+    if (key && valueParts.length > 0) {
+      const value = valueParts.join(':').trim();
+      
+      // Parse arrays like [item1, item2]
+      if (value.startsWith('[') && value.endsWith(']')) {
+        metadata[key.trim()] = value.slice(1, -1).split(',').map(s => s.trim());
+      } else {
+        metadata[key.trim()] = value.replace(/^["']|["']$/g, '');
+      }
+    }
+  });
+
+  return { metadata, body };
+}
+
+function getExcerpt(body: string, maxLength: number = 120): string {
+  // Remove markdown syntax
+  const clean = body
+    .replace(/^#+\s+/gm, '')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/^[-*+]\s+/gm, '')
+    .replace(/^\d+\.\s+/gm, '')
+    .trim();
+  
+  return clean.length > maxLength ? clean.slice(0, maxLength) + '...' : clean;
 }
 
 function getAllDocs(config: KnowledgeConfig): DocEntry[] {
@@ -51,10 +93,8 @@ function getAllDocs(config: KnowledgeConfig): DocEntry[] {
     for (const item of items) {
       const fullPath = path.join(dir, item.name);
       
-      // 排除指定目录
       if (config.excludeDirs.includes(item.name)) continue;
       
-      // 如果 showDirs 不为空，则只显示指定目录
       if (config.showDirs.length > 0 && !config.showDirs.includes(item.name) && item.isDirectory()) {
         continue;
       }
@@ -65,13 +105,21 @@ function getAllDocs(config: KnowledgeConfig): DocEntry[] {
         const ext = path.extname(item.name).toLowerCase();
         if (ext === '.md' || ext === '.mdx') {
           const slug = item.name.replace(/\.mdx?$/, '');
-          const title = extractTitle(fs.readFileSync(fullPath, 'utf-8'), slug);
+          const content = fs.readFileSync(fullPath, 'utf-8');
+          const { metadata, body } = parseFrontmatter(content);
+          
+          const title = metadata.title || extractTitle(body, slug);
+          const date = metadata.date;
+          const tags = metadata.tags || [];
           
           docs.push({
             title,
             slug,
             category,
-            path: fullPath.replace(basePath + '/', '')
+            path: fullPath.replace(basePath + '/', ''),
+            date,
+            tags,
+            excerpt: getExcerpt(body)
           });
         }
       }
@@ -79,6 +127,15 @@ function getAllDocs(config: KnowledgeConfig): DocEntry[] {
   }
   
   walk(basePath);
+  
+  // Sort by date descending
+  docs.sort((a, b) => {
+    if (a.date && b.date) {
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    }
+    return 0;
+  });
+  
   return docs;
 }
 
@@ -90,9 +147,8 @@ function extractTitle(content: string, fallback: string): string {
 const config = getConfig();
 const docs = getAllDocs(config);
 
-// Group by category
 const grouped = docs.reduce((acc, doc) => {
-  const cat = doc.category || 'uncategorized';
+  const cat = doc.category || doc.path.split('/')[0];
   if (!acc[cat]) acc[cat] = [];
   acc[cat].push(doc);
   return acc;
@@ -124,66 +180,182 @@ const categories = Object.keys(grouped).sort();
     />
   </div>
 
-  <!-- Categories -->
-  {categories.map(category => (
-    <div class="content-card" style="margin-bottom: 20px;">
-      <div style="padding: 16px 20px; border-bottom: 1px solid var(--apple-border); display: flex; align-items: center; gap: 8px;">
-        <span style="font-size: 18px;">📁</span>
-        <span style="font-weight: 600; font-size: 15px;">{category}</span>
-        <span style="color: var(--text-secondary); font-size: 13px; margin-left: auto;">
-          {grouped[category].length} 篇
-        </span>
-      </div>
-      <div>
-        {grouped[category].map(doc => (
-          <a 
-            href={`/knowledge/${doc.path.replace(/\\/g, '/').replace(/\.mdx?$/, '')}`}
-            class="file-item"
-          >
-            <span style="color: var(--apple-blue);">📄</span>
-            <span style="flex: 1;">{doc.title}</span>
-            <span style="color: var(--apple-blue); font-size: 13px;">→</span>
-          </a>
-        ))}
-      </div>
-    </div>
-  ))}
+  <!-- Doc Cards -->
+  <div style="display: grid; gap: 16px;">
+    {docs.map(doc => (
+      <a 
+        href={`/knowledge/${doc.path.replace(/\\/g, '/').replace(/\.mdx?$/, '')}`}
+        class="doc-card"
+        data-title={doc.title.toLowerCase()}
+        data-tags={doc.tags?.join(' ').toLowerCase() || ''}
+        data-excerpt={doc.excerpt || ''}
+      >
+        <div class="doc-card-inner">
+          <div class="doc-card-header">
+            <div class="doc-meta">
+              {doc.date && (
+                <span class="doc-date">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                  </svg>
+                  {doc.date}
+                </span>
+              )}
+              <span class="doc-category">{doc.category || doc.path.split('/')[0]}</span>
+            </div>
+            {doc.tags && doc.tags.length > 0 && (
+              <div class="doc-tags">
+                {doc.tags.slice(0, 3).map(tag => (
+                  <span class="doc-tag">{tag}</span>
+                ))}
+              </div>
+            )}
+          </div>
+          <h3 class="doc-title">{doc.title}</h3>
+          {doc.excerpt && (
+            <p class="doc-excerpt">{doc.excerpt}</p>
+          )}
+          <div class="doc-arrow">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+          </div>
+        </div>
+      </a>
+    ))}
+  </div>
 
   <!-- Empty state -->
   {docs.length === 0 && (
     <div class="content-card" style="padding: 48px; text-align: center;">
       <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
       <p style="color: var(--text-secondary);">暂无文档</p>
-      <p style="color: var(--text-secondary); font-size: 14px; margin-top: 8px;">
-        请在 config/site.config.json 中配置知识库路径
-      </p>
     </div>
   )}
 </Layout>
 
+<style>
+  .doc-card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .doc-card-inner {
+    background: var(--bg-primary);
+    border-radius: var(--radius-md);
+    padding: 20px 24px;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid transparent;
+    transition: all 0.25s ease;
+    position: relative;
+  }
+
+  .doc-card:hover .doc-card-inner {
+    box-shadow: var(--shadow-md);
+    border-color: var(--apple-border);
+    transform: translateY(-2px);
+  }
+
+  .doc-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .doc-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+  }
+
+  .doc-date {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--text-secondary);
+  }
+
+  .doc-category {
+    color: var(--apple-blue);
+    font-weight: 500;
+    background: rgba(0, 122, 255, 0.08);
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+  }
+
+  .doc-tags {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .doc-tag {
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  .doc-title {
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    line-height: 1.4;
+  }
+
+  .doc-excerpt {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    margin: 0;
+  }
+
+  .doc-arrow {
+    position: absolute;
+    right: 24px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--apple-border);
+    transition: all 0.25s ease;
+  }
+
+  .doc-card:hover .doc-arrow {
+    color: var(--apple-blue);
+    transform: translateY(-50%) translateX(4px);
+  }
+</style>
+
 <script>
   const searchInput = document.getElementById('search-input');
-  const fileItems = document.querySelectorAll('.file-item');
+  const docCards = document.querySelectorAll('.doc-card');
   
   searchInput?.addEventListener('input', (e) => {
     const query = (e.target as HTMLInputElement).value.toLowerCase();
     
-    fileItems.forEach(item => {
-      const text = item.textContent?.toLowerCase() || '';
-      if (text.includes(query) || query === '') {
-        item.removeAttribute('hidden');
+    docCards.forEach(card => {
+      const title = card.getAttribute('data-title') || '';
+      const tags = card.getAttribute('data-tags') || '';
+      const excerpt = card.getAttribute('data-excerpt') || '';
+      
+      const matches = title.includes(query) || tags.includes(query) || excerpt.includes(query);
+      
+      if (matches || query === '') {
+        (card as HTMLElement).style.display = 'block';
       } else {
-        item.setAttribute('hidden', '');
-      }
-    });
-    
-    // Hide empty categories
-    document.querySelectorAll('.content-card').forEach(card => {
-      const visibleItems = card.querySelectorAll('.file-item:not([hidden])');
-      if (visibleItems.length === 0) {
-        card.setAttribute('hidden', '');
-      } else {
-        card.removeAttribute('hidden');
+        (card as HTMLElement).style.display = 'none';
       }
     });
   });
